@@ -1,0 +1,7 @@
+/_site/
+/.quarto/
+__pycache__/
+*.nc
+*.pdf
+
+**/*.quarto_ipynb

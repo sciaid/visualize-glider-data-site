@@ -1,0 +1,15 @@
+---
+title: "amlr01-20241120"
+page-layout: full
+toc: false
+---
+
+| Glider | Start | End | Profiles | Max depth | Area |
+|---|---|---|---|---|---|
+| amlr01 | 2024-11-20 | 2025-01-02 | 778 | 912 m | -63.44° to -62.13°, -62.34° to -56.93° |
+
+<iframe src="../viewer/index.html?d=amlr01-20241120" title="3D curtain viewer: amlr01-20241120"
+        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;" loading="lazy"></iframe>
+
+[Open the viewer full screen](../viewer/index.html?d=amlr01-20241120){target="_blank"} ·
+[How these plots are made](../methods.qmd)

@@ -1,0 +1,27 @@
+project:
+  type: website
+  output-dir: _site
+  # Pre-built pages and data, copied into the site as they are
+  resources:
+    - "map/**"
+    - "viewer/**"
+
+website:
+  title: "AMLR glider deployments"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Overview
+      - href: deployments.qmd
+        text: Deployments
+      - href: viewer/index.html
+        text: Curtain viewer
+      - href: methods.qmd
+        text: Methods
+  page-footer:
+    center: "Glider data: NOAA SWFSC Ecosystem Science Division Glider Team (CC0-1.0). Bathymetry: GEBCO_2026 Grid."
+
+format:
+  html:
+    theme: cosmo
+    toc: false

@@ -1,0 +1,370 @@
+[
+ {
+  "name": "amlr02-20181211",
+  "start": "2018-12-11",
+  "end": "2019-03-08",
+  "profiles": 2279,
+  "maxDepth": 992.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr02",
+  "latRange": [
+   -63.23563,
+   -62.0579
+  ],
+  "lonRange": [
+   -62.41274,
+   -60.4917
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr01-20181216",
+  "start": "2018-12-16",
+  "end": "2019-03-08",
+  "profiles": 1059,
+  "maxDepth": 992.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr01",
+  "latRange": [
+   -63.47854,
+   -62.20716
+  ],
+  "lonRange": [
+   -61.84161,
+   -56.90477
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr02-20191206",
+  "start": "2019-12-06",
+  "end": "2020-03-12",
+  "profiles": 2382,
+  "maxDepth": 942.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr02",
+  "latRange": [
+   -63.54783,
+   -61.71024
+  ],
+  "lonRange": [
+   -62.99723,
+   -60.53725
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr03-20191206",
+  "start": "2019-12-06",
+  "end": "2020-03-12",
+  "profiles": 1227,
+  "maxDepth": 952.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr03",
+  "latRange": [
+   -63.60147,
+   -62.18963
+  ],
+  "lonRange": [
+   -61.79902,
+   -56.79596
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr01-20191216",
+  "start": "2019-12-16",
+  "end": "2020-03-12",
+  "profiles": 1060,
+  "maxDepth": 947.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr01",
+  "latRange": [
+   -63.54677,
+   -62.18949
+  ],
+  "lonRange": [
+   -61.66794,
+   -57.41607
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr01-20211121",
+  "start": "2021-11-21",
+  "end": "2021-12-18",
+  "profiles": 1392,
+  "maxDepth": 482.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr01",
+  "latRange": [
+   -62.51419,
+   -62.08745
+  ],
+  "lonRange": [
+   -61.54924,
+   -60.43767
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr05-20211124",
+  "start": "2021-11-25",
+  "end": "2021-12-15",
+  "profiles": 536,
+  "maxDepth": 957.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr05",
+  "latRange": [
+   -64.70194,
+   -63.51451
+  ],
+  "lonRange": [
+   -65.06933,
+   -61.3532
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr07-20221204",
+  "start": "2022-12-04",
+  "end": "2022-12-25",
+  "profiles": 280,
+  "maxDepth": 967.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr07",
+  "latRange": [
+   -62.4902,
+   -61.69218
+  ],
+  "lonRange": [
+   -62.51897,
+   -61.18078
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr04-20221205",
+  "start": "2022-12-05",
+  "end": "2023-02-13",
+  "profiles": 1513,
+  "maxDepth": 962.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr04",
+  "latRange": [
+   -63.75664,
+   -62.21244
+  ],
+  "lonRange": [
+   -61.85257,
+   -57.31997
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr06-20221205",
+  "start": "2022-12-05",
+  "end": "2023-02-05",
+  "profiles": 1013,
+  "maxDepth": 962.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr06",
+  "latRange": [
+   -63.72283,
+   -62.21427
+  ],
+  "lonRange": [
+   -61.85357,
+   -57.30681
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr03-20231128",
+  "start": "2023-11-28",
+  "end": "2024-01-27",
+  "profiles": 1158,
+  "maxDepth": 902.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr03",
+  "latRange": [
+   -63.94424,
+   -62.20077
+  ],
+  "lonRange": [
+   -62.18833,
+   -57.15983
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr04-20231128",
+  "start": "2023-11-28",
+  "end": "2024-01-27",
+  "profiles": 1122,
+  "maxDepth": 917.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr04",
+  "latRange": [
+   -63.87666,
+   -62.19201
+  ],
+  "lonRange": [
+   -62.19288,
+   -57.17096
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr01-20241120",
+  "start": "2024-11-20",
+  "end": "2025-01-02",
+  "profiles": 778,
+  "maxDepth": 912.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr01",
+  "latRange": [
+   -63.44064,
+   -62.13282
+  ],
+  "lonRange": [
+   -62.33523,
+   -56.92877
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr08-20241120",
+  "start": "2024-11-20",
+  "end": "2024-11-24",
+  "profiles": 102,
+  "maxDepth": 922.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr08",
+  "latRange": [
+   -63.2896,
+   -62.94889
+  ],
+  "lonRange": [
+   -62.33974,
+   -61.38137
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr02-20251123",
+  "start": "2025-11-23",
+  "end": "2025-11-29",
+  "profiles": 206,
+  "maxDepth": 967.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr02",
+  "latRange": [
+   -62.72131,
+   -62.14514
+  ],
+  "lonRange": [
+   -58.97087,
+   -58.08611
+  ],
+  "bathy": true
+ },
+ {
+  "name": "amlr30-20260114",
+  "start": "2026-01-14",
+  "end": "2026-02-02",
+  "profiles": 439,
+  "maxDepth": 897.5,
+  "vars": [
+   "temperature",
+   "salinity",
+   "chlorophyll",
+   "oxygen_concentration"
+  ],
+  "glider": "amlr30",
+  "latRange": [
+   -63.76028,
+   -62.92437
+  ],
+  "lonRange": [
+   -62.30107,
+   -61.22412
+  ],
+  "bathy": true
+ }
+]
