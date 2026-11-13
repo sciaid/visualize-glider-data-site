@@ -9,7 +9,7 @@ toc: false
 | amlr02 | 2025-11-23 | 2025-11-29 | 206 | 968 m | -62.72° to -62.15°, -58.97° to -58.09° |
 
 <iframe src="../viewer/index.html?d=amlr02-20251123" title="3D curtain viewer: amlr02-20251123"
-        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;" loading="lazy"></iframe>
+        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 
 [Open the viewer full screen](../viewer/index.html?d=amlr02-20251123){target="_blank"} ·
 [How these plots are made](../methods.qmd)

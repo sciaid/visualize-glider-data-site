@@ -42,7 +42,7 @@ toc: false
 | {glider} | {start} | {end} | {profiles:,} | {maxDepth:.0f} m | {lat0:.2f}° to {lat1:.2f}°, {lon0:.2f}° to {lon1:.2f}° |
 
 <iframe src="../viewer/index.html?d={name}" title="3D curtain viewer: {name}"
-        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;" loading="lazy"></iframe>
+        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 
 [Open the viewer full screen](../viewer/index.html?d={name}){{target="_blank"}} ·
 [How these plots are made](../methods.qmd)
