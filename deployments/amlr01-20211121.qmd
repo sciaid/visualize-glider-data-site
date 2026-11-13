@@ -9,7 +9,7 @@ toc: false
 | amlr01 | 2021-11-21 | 2021-12-18 | 1,392 | 482 m | -62.51° to -62.09°, -61.55° to -60.44° |
 
 <iframe src="../viewer/index.html?d=amlr01-20211121" title="3D curtain viewer: amlr01-20211121"
-        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;" loading="lazy"></iframe>
+        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 
 [Open the viewer full screen](../viewer/index.html?d=amlr01-20211121){target="_blank"} ·
 [How these plots are made](../methods.qmd)
