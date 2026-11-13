@@ -210,6 +210,22 @@ def read_file(args):
 # --------------------------------------------------------------------------- #
 # Output
 # --------------------------------------------------------------------------- #
+def load_regions(path):
+    """Region list from a JSON file: [{"name": ..., "lat": [min, max], "lon": [min, max]}, ...]."""
+    if not path or not Path(path).exists():
+        return []
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def assign_region(lat, lon, regions, default="Other"):
+    """Name of the first region whose box holds the deployment's median position."""
+    la, lo = float(np.nanmedian(lat)), float(np.nanmedian(lon))
+    for r in regions:
+        if r["lat"][0] <= la <= r["lat"][1] and r["lon"][0] <= lo <= r["lon"][1]:
+            return r["name"]
+    return default
+
+
 def iso(t):
     return dt.datetime.fromtimestamp(float(t), dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -220,7 +236,8 @@ def decimate(n, max_points):
     return np.unique(np.linspace(0, n - 1, max_points).round().astype(int))
 
 
-def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_template=None, map_name="glider_map.html"):
+def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_template=None, map_name="glider_map.html",
+          regions=None):
     files = []
     for p in paths:
         p = Path(p)
@@ -282,15 +299,16 @@ def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_t
                 "t": [int(round(x)) for x in t[idx]],
                 "lat": [round(float(x), 5) for x in la[idx]],
                 "lon": [round(float(x), 5) for x in lo[idx]],
+                "region": assign_region(la, lo, regions or []) if regions else "",
             })
 
     sum_path = out_dir / "deployments_summary.csv"
     with open(sum_path, "w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["deployment", "start_utc", "end_utc", "duration_days", "n_points", "n_files",
+        w.writerow(["deployment", "region", "start_utc", "end_utc", "duration_days", "n_points", "n_files",
                     "lat_min", "lon_min", "lat_max", "lon_max"])
         for d in deployments:
-            w.writerow([d["name"], iso(d["start"]), iso(d["end"]),
+            w.writerow([d["name"], d["region"], iso(d["start"]), iso(d["end"]),
                         f"{(d['end'] - d['start']) / 86400:.1f}", d["n"], d["files"],
                         *[f"{b:.5f}" for b in d["bounds"]]])
 
@@ -386,6 +404,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <div id="app">
   <aside id="panel">
     <header><h1>__TITLE__</h1><div class="muted" id="count"></div></header>
+    <div class="section" id="regionSec" style="display:none">
+      <h2>Region <span class="links"><button id="rAll">All</button></span></h2>
+      <div id="regions"></div>
+    </div>
     <div class="section">
       <h2>Start year <span class="links"><button id="yAll">All</button><button id="yNone">None</button></span></h2>
       <div id="years"></div>
@@ -465,6 +487,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     const days = ((d.end - d.start) / 86400).toFixed(1);
     L.popup().setLatLng([d.lat[best], d.lon[best]]).setContent(
       `<div class="pop"><b>${esc(d.name)}</b><table>
+       ${d.region ? `<tr><td>Region</td><td>${esc(d.region)}</td></tr>` : ''}
        <tr><td>Start</td><td>${fmtTime(d.start)}</td></tr>
        <tr><td>End</td><td>${fmtTime(d.end)}</td></tr>
        <tr><td>Duration</td><td>${days} days</td></tr>
@@ -497,6 +520,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     chip.dataset.year = y;
     yearsEl.appendChild(chip);
   });
+  // Regions: shown only when deployments span more than one region. Changing it re-fits the map.
+  const regions = [...new Set(deps.map(d => d.region).filter(Boolean))].sort();
+  // Open on the region with the most deployments; the others are one click away (counts on the chips).
+  const count = r => deps.filter(d => d.region === r).length;
+  const selRegions = new Set(regions.length > 1 ? [regions.reduce((a, r) => count(r) > count(a) ? r : a)] : regions);
+  const regionsEl = document.getElementById('regions');
+  if (regions.length > 1) {
+    document.getElementById('regionSec').style.display = '';
+    regions.forEach(r => {
+      const chip = document.createElement('span');
+      chip.className = 'chip'; chip.textContent = `${r} (${deps.filter(d => d.region === r).length})`; chip.dataset.region = r;
+      chip.onclick = e => {
+        if (e.shiftKey || e.ctrlKey || e.metaKey) { selRegions.has(r) ? selRegions.delete(r) : selRegions.add(r); }
+        else { selRegions.clear(); selRegions.add(r); }          // plain click = just this region
+        render(); fit(visible());
+      };
+      regionsEl.appendChild(chip);
+    });
+    document.getElementById('rAll').onclick = () => { regions.forEach(r => selRegions.add(r)); render(); fit(visible()); };
+  }
   document.getElementById('yAll').onclick = () => { years.forEach(y => selYears.add(y)); render(); };
   document.getElementById('yNone').onclick = () => { selYears.clear(); render(); };
   document.getElementById('search').oninput = e => {
@@ -508,13 +551,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   document.getElementById('zoom').onclick = () => fit(visible());
 
   const inYears = d => d.years.some(y => selYears.has(y));
+  const inRegion = d => regions.length < 2 || selRegions.has(d.region);
   const matches = d => !query.length || query.some(q => d.name.toLowerCase().includes(q));
-  const shown = () => deps.filter(d => inYears(d) && matches(d));          // in the list
+  const shown = () => deps.filter(d => inRegion(d) && inYears(d) && matches(d));          // in the list
   const visible = () => shown().filter(d => d.checked);                     // on the map
 
   const listEl = document.getElementById('list');
   function render() {
     [...yearsEl.children].forEach(c => c.classList.toggle('off', !selYears.has(+c.dataset.year)));
+    [...regionsEl.children].forEach(c => c.classList.toggle('off', !selRegions.has(c.dataset.region)));
     const s = shown(), v = new Set(visible());
     listEl.innerHTML = '';
     s.sort((a, b) => a.start - b.start).forEach(d => {
@@ -548,7 +593,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
 
   render();
-  fit(deps);
+  fit(regions.length > 1 ? visible() : deps);
 })();
 </script>
 </body>
@@ -576,11 +621,13 @@ def main(argv=None):
                     help="URL for each deployment's page, with {name} as placeholder "
                          "(adds an 'Open 3D curtain' link to the map popups)")
     ap.add_argument("--map-name", default="glider_map.html", help="file name for the map page")
+    ap.add_argument("--regions", default=None,
+                    help='JSON file of regions: [{"name": "Hawaii", "lat": [15, 26], "lon": [-165, -150]}, ...]')
     a = ap.parse_args(argv)
     if a.group_by == "trajectory":
         a.group_by = "auto"
     build(a.paths, a.out_dir, a.positions, a.group_by, a.max_map_points, a.workers, a.title,
-          a.link_template, a.map_name)
+          a.link_template, a.map_name, load_regions(a.regions))
 
 
 if __name__ == "__main__":

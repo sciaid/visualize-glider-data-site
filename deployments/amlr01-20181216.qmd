@@ -4,9 +4,9 @@ page-layout: full
 toc: false
 ---
 
-| Glider | Start | End | Profiles | Max depth | Area |
-|---|---|---|---|---|---|
-| amlr01 | 2018-12-16 | 2019-03-08 | 1,059 | 992 m | -63.48° to -62.21°, -61.84° to -56.90° |
+| Region | Glider | Start | End | Profiles | Max depth | Area |
+|---|---|---|---|---|---|---|
+| Antarctic Peninsula | amlr01 | 2018-12-16 | 2019-03-08 | 1,059 | 992 m | -63.48° to -62.21°, -61.84° to -56.90° |
 
 <iframe src="../viewer/index.html?d=amlr01-20181216" title="3D curtain viewer: amlr01-20181216"
         style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>

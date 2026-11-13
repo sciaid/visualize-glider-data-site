@@ -148,8 +148,12 @@ def load(path, var_names, profile_step, bathy=None):
         "vars": [],
     }
     data["aux"] = derived_block(ds, idx, depth, nd, t[idx], lat[idx], lon[idx])
-    if bathy is not None:
-        data["bathy"] = bathy_block(bathy, lat[idx], lon[idx], lat0, lon0, kx)
+    grids = bathy if isinstance(bathy, (list, tuple)) else ([bathy] if bathy is not None else [])
+    grid = pick_bathy(grids, lat[idx], lon[idx]) if grids else None
+    if grid is not None:
+        data["bathy"] = bathy_block(grid, lat[idx], lon[idx], lat0, lon0, kx)
+    elif grids:
+        print("  note: no bathymetry grid covers this deployment; built without seafloor")
     for v in variables:
         arr = v["arr"][:nd]
         fin = arr[np.isfinite(arr)]
@@ -345,6 +349,13 @@ class Bathy:
         self.doi = next((str(getattr(g, k)).replace("DOI: ", "doi:") for k in
                          ("identifier_product_doi", "doi", "DOI", "references") if hasattr(g, k)), "")
         self.z = None   # full grid loaded on first use
+        self.lat_lim = (float(np.nanmin(self.lat)), float(np.nanmax(self.lat)))
+        self.lon_lim = (float(np.nanmin(self.lon)), float(np.nanmax(self.lon)))
+        self.area = (self.lat_lim[1] - self.lat_lim[0]) * (self.lon_lim[1] - self.lon_lim[0])
+
+    def covers(self, lat, lon):
+        return ((lat >= self.lat_lim[0]) & (lat <= self.lat_lim[1]) &
+                (lon >= self.lon_lim[0]) & (lon <= self.lon_lim[1]))
 
     def _grid(self):
         if self.z is None:
@@ -372,12 +383,25 @@ class Bathy:
 
 
 def find_bathy(paths):
-    """Auto-detect a GEBCO/ETOPO grid next to the glider files."""
-    for d in {Path(p).resolve().parent for p in paths}:
+    """Auto-detect GEBCO/ETOPO grids (file names containing gebco/etopo/bathy) in the folders
+    holding the glider files and one level below. Several grids = several regions."""
+    found = []
+    for d in sorted({Path(p).resolve().parent for p in paths}):
         for q in sorted(list(d.glob("*.nc")) + list(d.glob("*/*.nc"))):
-            if any(k in q.name.lower() for k in ("gebco", "etopo", "bathy")):
-                return q
-    return None
+            if any(k in q.name.lower() for k in ("gebco", "etopo", "bathy")) and q not in found:
+                found.append(q)
+    return found
+
+
+def pick_bathy(grids, lat, lon, min_frac=0.95):
+    """The grid covering the most of this deployment's positions (at least min_frac), smallest first
+    on ties so a detailed regional grid beats a coarse wide one."""
+    best, best_frac = None, 0.0
+    for g in sorted(grids, key=lambda g: g.area):
+        frac = float(np.mean(g.covers(lat, lon)))
+        if frac > best_frac + 1e-9:
+            best, best_frac = g, frac
+    return best if best is not None and best_frac >= min_frac else None
 
 
 def bathy_block(bathy, lat, lon, lat0, lon0, kx, max_cells=220):
@@ -455,13 +479,13 @@ def build_site(a, files, bathy):
     idx_path = site / "data" / "index.json"
     if idx_path.exists():                       # keep deployments built earlier
         index = [e for e in json.loads(idx_path.read_text()) if (site / "data" / f"{e['name']}.json").exists()]
-    for f in files:
+    for f in ([] if getattr(a, "viewer_only", False) else files):
         print(f)
         d = load(f, [s.strip() for s in a.vars.split(",") if s.strip()], a.profile_step, bathy)
         (site / "data" / f"{d['name']}.json").write_text(json.dumps(d, separators=(",", ":")), encoding="utf-8")
         start = dt.datetime.fromtimestamp(d["time"][0], dt.timezone.utc)
         end = dt.datetime.fromtimestamp(d["time"][-1], dt.timezone.utc)
-        entry = {"name": d["name"], "start": start.strftime("%Y-%m-%d"), "end": end.strftime("%Y-%m-%d"),
+        entry = {"name": d["name"], "file": Path(f).name, "start": start.strftime("%Y-%m-%d"), "end": end.strftime("%Y-%m-%d"),
                  "profiles": d["nProf"], "maxDepth": d["depth"][-1], "vars": [v["name"] for v in d["vars"]],
                  "glider": d["meta"].get("glider_name", ""),
                  "latRange": [min(d["lat"]), max(d["lat"])], "lonRange": [min(d["lon"]), max(d["lon"])],
@@ -486,17 +510,25 @@ def main(argv=None):
     ap.add_argument("--site", metavar="DIR",
                     help="write a shared viewer (DIR/index.html + plotly.min.js) and one data file per "
                          "deployment (DIR/data/<name>.json) for a website, instead of standalone pages")
+    ap.add_argument("--viewer-only", action="store_true",
+                    help="with --site: only rewrite the shared viewer page, no data files")
     ap.add_argument("--bathy", default="auto",
-                    help="GEBCO/ETOPO NetCDF grid for seafloor + land; 'auto' looks for a file named "
-                         "*gebco*/*etopo*/*bathy*.nc next to the glider files; 'none' to skip")
+                    help="GEBCO/ETOPO NetCDF grid(s) for seafloor + land, comma-separated; 'auto' finds every "
+                         "*gebco*/*etopo*/*bathy*.nc next to the glider files or one folder down and uses "
+                         "whichever covers each deployment; 'none' to skip")
     a = ap.parse_args(argv)
 
     files = [f for f in a.files if not any(k in Path(f).name.lower() for k in ("gebco", "etopo", "bathy"))]
     out = Path(a.out_dir); out.mkdir(parents=True, exist_ok=True)
     tag = plotly_tag(a.plotly)
-    bpath = None if a.bathy == "none" else (find_bathy(files) if a.bathy == "auto" else Path(a.bathy))
-    bathy = Bathy(bpath) if bpath else None
-    print(f"Bathymetry: {bpath if bpath else 'none'}")
+    if a.bathy == "none":
+        bpaths = []
+    elif a.bathy == "auto":
+        bpaths = find_bathy(files)
+    else:
+        bpaths = [Path(x) for x in a.bathy.split(",")]
+    bathy = [Bathy(b) for b in bpaths]
+    print("Bathymetry grids: " + (", ".join(str(b) for b in bpaths) if bpaths else "none"))
     if a.site:
         return build_site(a, files, bathy)
     for f in files:
@@ -606,7 +638,12 @@ __PLOTLY__
     const want = new URLSearchParams(location.search).get('d');
     const name = idx.some(e => e.name === want) ? want : idx[0].name;
     const sel = document.getElementById('dep');
-    idx.forEach(e => sel.add(new Option(`${e.name}  (${e.start} → ${e.end})`, e.name, false, e.name === name)));
+    const groups = {};
+    idx.forEach(e => (groups[e.region || ''] = groups[e.region || ''] || []).push(e));
+    Object.keys(groups).forEach(g => {
+      const parent = g && Object.keys(groups).length > 1 ? sel.appendChild(Object.assign(document.createElement('optgroup'), { label: g })) : sel;
+      groups[g].forEach(e => parent.appendChild(new Option(`${e.name}  (${e.start} → ${e.end})`, e.name, false, e.name === name)));
+    });
     sel.onchange = () => { location.search = '?d=' + encodeURIComponent(sel.value); };
     if (window.self === window.top) document.getElementById('depRow').style.display = '';   // hidden when embedded in a page
     D = await fetch(`data/${encodeURIComponent(name)}.json`).then(r => r.json());
