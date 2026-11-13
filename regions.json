@@ -1,0 +1,5 @@
+[
+  {"name": "Antarctic Peninsula", "lat": [-70, -55], "lon": [-80, -40]},
+  {"name": "Hawaii",              "lat": [15, 26],   "lon": [-165, -150]},
+  {"name": "California",          "lat": [28, 50],   "lon": [-135, -114]}
+]

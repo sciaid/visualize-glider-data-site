@@ -1,6 +1,7 @@
 [
  {
   "name": "amlr02-20181211",
+  "file": "amlr02-20181211_grid-delayed-5m.nc",
   "start": "2018-12-11",
   "end": "2019-03-08",
   "profiles": 2279,
@@ -20,10 +21,13 @@
    -62.41274,
    -60.4917
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "140366967-521fdadd1fedfd90",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr01-20181216",
+  "file": "amlr01-20181216_grid-delayed-5m.nc",
   "start": "2018-12-16",
   "end": "2019-03-08",
   "profiles": 1059,
@@ -43,10 +47,13 @@
    -61.84161,
    -56.90477
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "65322325-d7da8069066c7f1c",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr02-20191206",
+  "file": "amlr02-20191206_grid-delayed-5m.nc",
   "start": "2019-12-06",
   "end": "2020-03-12",
   "profiles": 2382,
@@ -66,10 +73,13 @@
    -62.99723,
    -60.53725
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "146702703-f671fa5e81389c37",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr03-20191206",
+  "file": "amlr03-20191206_grid-delayed-5m.nc",
   "start": "2019-12-06",
   "end": "2020-03-12",
   "profiles": 1227,
@@ -89,10 +99,13 @@
    -61.79902,
    -56.79596
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "75656341-c4e9d058980dc24e",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr01-20191216",
+  "file": "amlr01-20191216_grid-delayed-5m.nc",
   "start": "2019-12-16",
   "end": "2020-03-12",
   "profiles": 1060,
@@ -112,10 +125,13 @@
    -61.66794,
    -57.41607
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "65383837-1b7680f2026fcf5b",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr01-20211121",
+  "file": "amlr01-20211121_grid-delayed-5m.nc",
   "start": "2021-11-21",
   "end": "2021-12-18",
   "profiles": 1392,
@@ -135,10 +151,13 @@
    -61.54924,
    -60.43767
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "85805799-2348b5c5385a1681",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr05-20211124",
+  "file": "amlr05-20211124_grid-delayed-5m.nc",
   "start": "2021-11-25",
   "end": "2021-12-15",
   "profiles": 536,
@@ -158,10 +177,13 @@
    -65.06933,
    -61.3532
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "33151527-62d9270b1c3492c0",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr07-20221204",
+  "file": "amlr07-20221204_grid-delayed-5m.nc",
   "start": "2022-12-04",
   "end": "2022-12-25",
   "profiles": 280,
@@ -181,10 +203,13 @@
    -62.51897,
    -61.18078
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "16322476-593bb86e091c6652",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr04-20221205",
+  "file": "amlr04-20221205_grid-delayed-5m.nc",
   "start": "2022-12-05",
   "end": "2023-02-13",
   "profiles": 1513,
@@ -204,10 +229,13 @@
    -61.85257,
    -57.31997
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "87432002-0cf12ecbf6693ff7",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr06-20221205",
+  "file": "amlr06-20221205_grid-delayed-5m.nc",
   "start": "2022-12-05",
   "end": "2023-02-05",
   "profiles": 1013,
@@ -227,10 +255,13 @@
    -61.85357,
    -57.30681
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "62493805-1f18ff5813b9a761",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr03-20231128",
+  "file": "amlr03-20231128_grid-delayed-5m.nc",
   "start": "2023-11-28",
   "end": "2024-01-27",
   "profiles": 1158,
@@ -250,10 +281,13 @@
    -62.18833,
    -57.15983
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "71413066-f22531f74a9b4d55",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr04-20231128",
+  "file": "amlr04-20231128_grid-delayed-5m.nc",
   "start": "2023-11-28",
   "end": "2024-01-27",
   "profiles": 1122,
@@ -273,10 +307,13 @@
    -62.19288,
    -57.17096
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "64882204-f6bdcd7f01995c18",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr01-20241120",
+  "file": "amlr01-20241120_grid-delayed-5m.nc",
   "start": "2024-11-20",
   "end": "2025-01-02",
   "profiles": 778,
@@ -296,10 +333,13 @@
    -62.33523,
    -56.92877
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "48037448-6162e5677b058042",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr08-20241120",
+  "file": "amlr08-20241120_grid-delayed-5m.nc",
   "start": "2024-11-20",
   "end": "2024-11-24",
   "profiles": 102,
@@ -319,10 +359,13 @@
    -62.33974,
    -61.38137
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "6059574-d78b23b07a3a9ec3",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr02-20251123",
+  "file": "amlr02-20251123_grid-delayed-5m.nc",
   "start": "2025-11-23",
   "end": "2025-11-29",
   "profiles": 206,
@@ -342,10 +385,13 @@
    -58.97087,
    -58.08611
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "12856893-5d2d89767d6e2a0d",
+  "region": "Antarctic Peninsula"
  },
  {
   "name": "amlr30-20260114",
+  "file": "amlr30-20260114_grid-delayed-5m.nc",
   "start": "2026-01-14",
   "end": "2026-02-02",
   "profiles": 439,
@@ -365,6 +411,8 @@
    -62.30107,
    -61.22412
   ],
-  "bathy": true
+  "bathy": true,
+  "fingerprint": "27185060-a5143612d606d121",
+  "region": "Antarctic Peninsula"
  }
 ]

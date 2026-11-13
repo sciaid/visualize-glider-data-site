@@ -92,7 +92,12 @@
     const want = new URLSearchParams(location.search).get('d');
     const name = idx.some(e => e.name === want) ? want : idx[0].name;
     const sel = document.getElementById('dep');
-    idx.forEach(e => sel.add(new Option(`${e.name}  (${e.start} → ${e.end})`, e.name, false, e.name === name)));
+    const groups = {};
+    idx.forEach(e => (groups[e.region || ''] = groups[e.region || ''] || []).push(e));
+    Object.keys(groups).forEach(g => {
+      const parent = g && Object.keys(groups).length > 1 ? sel.appendChild(Object.assign(document.createElement('optgroup'), { label: g })) : sel;
+      groups[g].forEach(e => parent.appendChild(new Option(`${e.name}  (${e.start} → ${e.end})`, e.name, false, e.name === name)));
+    });
     sel.onchange = () => { location.search = '?d=' + encodeURIComponent(sel.value); };
     if (window.self === window.top) document.getElementById('depRow').style.display = '';   // hidden when embedded in a page
     D = await fetch(`data/${encodeURIComponent(name)}.json`).then(r => r.json());
