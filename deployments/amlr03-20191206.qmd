@@ -1,0 +1,15 @@
+---
+title: "amlr03-20191206"
+page-layout: full
+toc: false
+---
+
+| Glider | Start | End | Profiles | Max depth | Area |
+|---|---|---|---|---|---|
+| amlr03 | 2019-12-06 | 2020-03-12 | 1,227 | 952 m | -63.60° to -62.19°, -61.80° to -56.80° |
+
+<iframe src="../viewer/index.html?d=amlr03-20191206" title="3D curtain viewer: amlr03-20191206"
+        style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;" loading="lazy"></iframe>
+
+[Open the viewer full screen](../viewer/index.html?d=amlr03-20191206){target="_blank"} ·
+[How these plots are made](../methods.qmd)

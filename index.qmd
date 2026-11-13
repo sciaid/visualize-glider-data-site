@@ -1,0 +1,16 @@
+---
+title: "AMLR glider deployments"
+page-layout: full
+toc: false
+---
+
+Slocum glider deployments around the South Shetland Islands and the Antarctic Peninsula,
+from NOAA's Antarctic Marine Living Resources (AMLR) program. Filter the map by start year
+or deployment name; click a track and choose **Open 3D curtain** to explore temperature,
+salinity, chlorophyll and oxygen along that deployment.
+
+<iframe src="map/index.html" title="Map of glider deployments"
+        style="width:100%; height:72vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
+
+**Pages:** [all deployments](deployments.qmd) · [curtain viewer](viewer/index.html) ·
+[methods and data sources](methods.qmd)

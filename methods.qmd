@@ -1,0 +1,69 @@
+---
+title: "Methods and data sources"
+---
+
+## Glider data
+
+The deployments are gridded (L3) NetCDF files produced by the NOAA Southwest Fisheries
+Science Center (SWFSC) Ecosystem Science Division Glider Team with
+[pyglider](https://github.com/c-proof/pyglider) and
+[esdglider](https://github.com/SWFSC/esdglider)
+([glider lab manual](https://swfsc.github.io/glider-lab-manual/)). Each file holds one
+profile per column on 5 m depth bins, with one time, latitude and longitude per profile.
+The data are in the public domain (CC0-1.0).
+
+Values are shown as stored. The gridded QC flags are bin-averaged in these files, so they
+are not used for masking. Potential density in the files was computed from raw,
+uncorrected salinity.
+
+## What the viewer shows
+
+**3D curtain.** The selected variable on a vertical surface beneath the glider track,
+in km east/north of the deployment's mean position. Vertical exaggeration is adjustable;
+land heights are scaled down so islands do not hide the curtain.
+
+**Depth–time section.** The same variable against time and depth, with the seafloor
+under the track, labelled σθ contours (lightly smoothed along time for display), and a
+sun strip showing day, civil twilight, nautical twilight and night for each profile.
+
+**T–S diagram.** Potential temperature against practical salinity for the selected date
+window, with σθ isopycnals computed from the EOS-80 equation of state (Millero & Poisson
+1981). EOS-80 matches the files' potential density to within about 0.006 kg m⁻³ and is
+used only to draw the isopycnals.
+
+## Derived quantities
+
+**Mixed-layer depth** — the depth where σθ first exceeds its value at 10 m by
+0.03 kg m⁻³ (de Boyer Montégut et al. 2004), interpolated between bins. Left blank where
+a profile has no data in the top 15 m or never crosses the threshold.
+
+**Chlorophyll-maximum depth** — the depth of the largest chlorophyll value in the upper
+300 m after a 3-bin running mean, for profiles with data starting within 20 m of the surface.
+Daytime chlorophyll fluorescence near the surface is reduced by non-photochemical quenching
+(Xing et al. 2012), so daytime maxima can appear deeper than they are; compare with night
+profiles using the sun strip.
+
+Both lines are drawn as 7-profile running medians. The readout gives each profile's own value.
+
+**Sun elevation** — computed for each profile's time and position with the low-precision
+solar formulae of the Astronomical Almanac (no refraction). Classes: day > −0.833°,
+civil twilight to −6°, nautical twilight to −12°, night below.
+
+## Bathymetry and land
+
+GEBCO Compilation Group (2026) *GEBCO_2026 Grid*, 15 arc-second,
+doi:[10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa](https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa).
+Seafloor depth under the track is the nearest grid cell; the 3D surface is thinned for
+speed. GEBCO is partly interpolated away from survey lines and is not for navigation.
+
+## Colour maps
+
+cmocean perceptually uniform colour maps (Thyng et al. 2016): *thermal* for temperature,
+*haline* for salinity, *algae* for chlorophyll (log scale by default), *deep* for oxygen.
+
+## References
+
+- de Boyer Montégut, C., Madec, G., Fischer, A.S., Lazar, A., Iudicone, D. (2004). Mixed layer depth over the global ocean: An examination of profile data and a profile-based climatology. *J. Geophys. Res.* 109, C12003. <https://doi.org/10.1029/2004JC002378>
+- Millero, F.J., Poisson, A. (1981). International one-atmosphere equation of state of seawater. *Deep-Sea Research* 28A, 625–629. <https://doi.org/10.1016/0198-0149(81)90122-9>
+- Thyng, K.M., Greene, C.A., Hetland, R.D., Zimmerle, H.M., DiMarco, S.F. (2016). True colors of oceanography: Guidelines for effective and accurate colormap selection. *Oceanography* 29(3), 9–13. <https://doi.org/10.5670/oceanog.2016.66>
+- Xing, X., Claustre, H., Blain, S., D'Ortenzio, F., Antoine, D., Ras, J., Guinet, C. (2012). Quenching correction for in vivo chlorophyll fluorescence acquired by autonomous platforms. *Limnol. Oceanogr.: Methods* 10, 483–495. <https://doi.org/10.4319/lom.2012.10.483>

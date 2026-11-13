@@ -1,0 +1,24 @@
+---
+title: "Deployments"
+---
+
+16 deployments. Click a name for its 3D curtain, depth-time section and T–S diagram.
+
+| Deployment | Glider | Start | End | Profiles | Max depth |
+|---|---|---|---|---|---|
+| [amlr02-20181211](deployments/amlr02-20181211.qmd) | amlr02 | 2018-12-11 | 2019-03-08 | 2,279 | 992 m |
+| [amlr01-20181216](deployments/amlr01-20181216.qmd) | amlr01 | 2018-12-16 | 2019-03-08 | 1,059 | 992 m |
+| [amlr02-20191206](deployments/amlr02-20191206.qmd) | amlr02 | 2019-12-06 | 2020-03-12 | 2,382 | 942 m |
+| [amlr03-20191206](deployments/amlr03-20191206.qmd) | amlr03 | 2019-12-06 | 2020-03-12 | 1,227 | 952 m |
+| [amlr01-20191216](deployments/amlr01-20191216.qmd) | amlr01 | 2019-12-16 | 2020-03-12 | 1,060 | 948 m |
+| [amlr01-20211121](deployments/amlr01-20211121.qmd) | amlr01 | 2021-11-21 | 2021-12-18 | 1,392 | 482 m |
+| [amlr05-20211124](deployments/amlr05-20211124.qmd) | amlr05 | 2021-11-25 | 2021-12-15 | 536 | 958 m |
+| [amlr07-20221204](deployments/amlr07-20221204.qmd) | amlr07 | 2022-12-04 | 2022-12-25 | 280 | 968 m |
+| [amlr04-20221205](deployments/amlr04-20221205.qmd) | amlr04 | 2022-12-05 | 2023-02-13 | 1,513 | 962 m |
+| [amlr06-20221205](deployments/amlr06-20221205.qmd) | amlr06 | 2022-12-05 | 2023-02-05 | 1,013 | 962 m |
+| [amlr03-20231128](deployments/amlr03-20231128.qmd) | amlr03 | 2023-11-28 | 2024-01-27 | 1,158 | 902 m |
+| [amlr04-20231128](deployments/amlr04-20231128.qmd) | amlr04 | 2023-11-28 | 2024-01-27 | 1,122 | 918 m |
+| [amlr01-20241120](deployments/amlr01-20241120.qmd) | amlr01 | 2024-11-20 | 2025-01-02 | 778 | 912 m |
+| [amlr08-20241120](deployments/amlr08-20241120.qmd) | amlr08 | 2024-11-20 | 2024-11-24 | 102 | 922 m |
+| [amlr02-20251123](deployments/amlr02-20251123.qmd) | amlr02 | 2025-11-23 | 2025-11-29 | 206 | 968 m |
+| [amlr30-20260114](deployments/amlr30-20260114.qmd) | amlr30 | 2026-01-14 | 2026-02-02 | 439 | 898 m |
