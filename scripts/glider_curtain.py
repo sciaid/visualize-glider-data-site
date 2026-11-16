@@ -425,6 +425,16 @@ def _coastline(blat, blon, z, lat0, lon0, kx):
             "y": [None if v is None else round(v, 3) for v in ys]}
 
 
+def track_distance_km(lat, lon):
+    """Approximate distance over ground: sum of great-circle (haversine) distances between
+    consecutive profile positions, in time order. Gridded files hold one position per profile,
+    not the GPS surface fixes, so this is an estimate (see the methods page)."""
+    la, lo = np.radians(np.asarray(lat, float)), np.radians(np.asarray(lon, float))
+    a = (np.sin(np.diff(la) / 2) ** 2
+         + np.cos(la[:-1]) * np.cos(la[1:]) * np.sin(np.diff(lo) / 2) ** 2)
+    return float(np.nansum(6371.0088 * 2 * np.arcsin(np.sqrt(a))))
+
+
 def plotly_tag(mode):
     if mode != "cdn":
         try:
@@ -465,7 +475,9 @@ def build_site(a, files, bathy):
                  "profiles": d["nProf"], "maxDepth": d["depth"][-1], "vars": [v["name"] for v in d["vars"]],
                  "glider": d["meta"].get("glider_name", ""),
                  "latRange": [min(d["lat"]), max(d["lat"])], "lonRange": [min(d["lon"]), max(d["lon"])],
-                 "bathy": bool(d.get("bathy"))}
+                 "bathy": bool(d.get("bathy")),
+                 "distanceKm": round(track_distance_km(d["lat"], d["lon"]), 1),
+                 "days": round((d["time"][-1] - d["time"][0]) / 86400, 2)}
         index = [e for e in index if e["name"] != d["name"]] + [entry]
         print(f"  {d['nProf']} profiles -> {site / 'data' / (d['name'] + '.json')}")
     index.sort(key=lambda e: e["start"])

@@ -49,6 +49,18 @@ Both lines are drawn as 7-profile running medians. The readout gives each profil
 solar formulae of the Astronomical Almanac (no refraction). Classes: day > −0.833°,
 civil twilight to −6°, nautical twilight to −12°, night below.
 
+## Track distance
+
+The distance shown for each deployment is the sum of great-circle (haversine) distances
+between consecutive profile positions, in time order. The gridded files store one position
+per profile, not the glider's GPS surface fixes, so the figure is approximate. For these 16
+deployments, summing only every 2nd profile gives totals 3–13% lower and every 5th profile
+7–27% lower, because part of the
+along-track wiggle between profiles is real path curvature and part is position noise that
+the gridded files cannot separate. It is distance over ground, including drift with currents,
+not distance through the water. The average per day is the total distance divided by the time from the first to the last
+profile, so it includes any pauses or gaps in the deployment.
+
 ## Bathymetry and land
 
 GEBCO Compilation Group (2026) *GEBCO_2026 Grid*, 15 arc-second,

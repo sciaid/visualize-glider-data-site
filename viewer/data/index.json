@@ -20,7 +20,9 @@
    -62.41274,
    -60.4917
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1745.6,
+  "days": 86.47
  },
  {
   "name": "amlr01-20181216",
@@ -43,7 +45,9 @@
    -61.84161,
    -56.90477
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1785.8,
+  "days": 81.73
  },
  {
   "name": "amlr02-20191206",
@@ -66,7 +70,9 @@
    -62.99723,
    -60.53725
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 2197.6,
+  "days": 96.64
  },
  {
   "name": "amlr03-20191206",
@@ -89,7 +95,9 @@
    -61.79902,
    -56.79596
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 2312.6,
+  "days": 96.93
  },
  {
   "name": "amlr01-20191216",
@@ -112,7 +120,9 @@
    -61.66794,
    -57.41607
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1985.8,
+  "days": 86.99
  },
  {
   "name": "amlr01-20211121",
@@ -135,7 +145,9 @@
    -61.54924,
    -60.43767
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 589.6,
+  "days": 26.46
  },
  {
   "name": "amlr05-20211124",
@@ -158,7 +170,9 @@
    -65.06933,
    -61.3532
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 508.4,
+  "days": 20.08
  },
  {
   "name": "amlr07-20221204",
@@ -181,7 +195,9 @@
    -62.51897,
    -61.18078
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 448.4,
+  "days": 20.58
  },
  {
   "name": "amlr04-20221205",
@@ -204,7 +220,9 @@
    -61.85257,
    -57.31997
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1995.6,
+  "days": 70.21
  },
  {
   "name": "amlr06-20221205",
@@ -227,7 +245,9 @@
    -61.85357,
    -57.30681
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1694.5,
+  "days": 61.94
  },
  {
   "name": "amlr03-20231128",
@@ -250,7 +270,9 @@
    -62.18833,
    -57.15983
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1635.1,
+  "days": 59.62
  },
  {
   "name": "amlr04-20231128",
@@ -273,7 +295,9 @@
    -62.19288,
    -57.17096
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1398.5,
+  "days": 59.66
  },
  {
   "name": "amlr01-20241120",
@@ -296,7 +320,9 @@
    -62.33523,
    -56.92877
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 1127.9,
+  "days": 43.03
  },
  {
   "name": "amlr08-20241120",
@@ -319,7 +345,9 @@
    -62.33974,
    -61.38137
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 125.3,
+  "days": 3.38
  },
  {
   "name": "amlr02-20251123",
@@ -342,7 +370,9 @@
    -58.97087,
    -58.08611
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 125.1,
+  "days": 5.9
  },
  {
   "name": "amlr30-20260114",
@@ -365,6 +395,8 @@
    -62.30107,
    -61.22412
   ],
-  "bathy": true
+  "bathy": true,
+  "distanceKm": 430.5,
+  "days": 18.81
  }
 ]

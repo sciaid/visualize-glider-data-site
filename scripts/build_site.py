@@ -37,16 +37,31 @@ page-layout: full
 toc: false
 ---
 
-| Glider | Start | End | Profiles | Max depth | Area |
-|---|---|---|---|---|---|
-| {glider} | {start} | {end} | {profiles:,} | {maxDepth:.0f} m | {lat0:.2f}° to {lat1:.2f}°, {lon0:.2f}° to {lon1:.2f}° |
+| Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day | Area |
+|---|---|---|---|---|---|---|---|
+| {glider} | {start} | {end} | {profiles:,} | {maxDepth:.0f} m | {distance} | {per_day} | {lat0:.2f}° to {lat1:.2f}°, {lon0:.2f}° to {lon1:.2f}° |
 
 <iframe src="../viewer/index.html?d={name}" title="3D curtain viewer: {name}"
         style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 
 [Open the viewer full screen](../viewer/index.html?d={name}){{target="_blank"}} ·
 [How these plots are made](../methods.qmd)
+
+<small>Distance is summed between consecutive profile positions, not GPS surface fixes, so treat it as
+approximate (it depends on how finely the track is sampled); see [Methods](../methods.qmd#track-distance).</small>
 """
+
+
+def fmt_distance(e):
+    """'≈ 2,000 km', rounded to 10 km; blank if not computed."""
+    km = e.get("distanceKm")
+    return "" if km is None else f"≈ {round(km, -1):,.0f} km"
+
+
+def fmt_per_day(e):
+    """Average over the whole deployment: distance / (last - first profile time)."""
+    km, days = e.get("distanceKm"), e.get("days")
+    return f"≈ {km / days:.0f} km/day" if km is not None and days else ""
 
 
 def main():
@@ -80,21 +95,21 @@ def main():
     (ROOT / "deployments").mkdir(exist_ok=True)
     for e in index:
         page = DEPLOYMENT_PAGE.format(
-            name=e["name"], glider=e.get("glider") or "", start=e["start"], end=e["end"],
+            name=e["name"], glider=e.get("glider") or "", start=e["start"], end=e["end"], distance=fmt_distance(e), per_day=fmt_per_day(e),
             profiles=e["profiles"], maxDepth=e["maxDepth"],
             lat0=e["latRange"][0], lat1=e["latRange"][1], lon0=e["lonRange"][0], lon1=e["lonRange"][1])
         (ROOT / "deployments" / f"{e['name']}.qmd").write_text(page, encoding="utf-8")
     rows = "\n".join(
         f"| [{e['name']}](deployments/{e['name']}.qmd) | {e.get('glider', '')} | {e['start']} | {e['end']} "
-        f"| {e['profiles']:,} | {e['maxDepth']:.0f} m |" for e in index)
+        f"| {e['profiles']:,} | {e['maxDepth']:.0f} m | {fmt_distance(e)} | {fmt_per_day(e)} |" for e in index)
     (ROOT / "deployments.qmd").write_text(f"""---
 title: "Deployments"
 ---
 
 {len(index)} deployments. Click a name for its 3D curtain, depth-time section and T–S diagram.
 
-| Deployment | Glider | Start | End | Profiles | Max depth |
-|---|---|---|---|---|---|
+| Deployment | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |
+|---|---|---|---|---|---|---|---|
 {rows}
 """, encoding="utf-8")
     print(f"Wrote {len(index)} deployment pages. Next: git add -A, commit and push.")
