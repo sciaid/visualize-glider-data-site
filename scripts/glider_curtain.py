@@ -559,7 +559,8 @@ __PLOTLY__
 </style></head>
 <body><div id="app">
 <aside>
-  <div id="depRow" style="display:none;margin-bottom:8px"><select id="dep" style="width:100%"></select></div>
+  <a id="backLink" href="../index.html" style="display:none;font-size:12px;color:var(--accent);text-decoration:none">← Back to site</a>
+  <div id="depRow" style="display:none;margin:6px 0 8px"><select id="dep" style="width:100%"></select></div>
   <h1 id="title"></h1>
   <div class="muted" id="sub"></div>
 
@@ -619,8 +620,13 @@ __PLOTLY__
     const name = idx.some(e => e.name === want) ? want : idx[0].name;
     const sel = document.getElementById('dep');
     idx.forEach(e => sel.add(new Option(`${e.name}  (${e.start} → ${e.end})`, e.name, false, e.name === name)));
-    sel.onchange = () => { location.search = '?d=' + encodeURIComponent(sel.value); };
-    if (window.self === window.top) document.getElementById('depRow').style.display = '';   // hidden when embedded in a page
+    // Picker: shown when opened on its own, or embedded with ?picker=1 (the site's Curtain viewer page).
+    // Hidden on deployment pages, where the page fixes the deployment.
+    const params = new URLSearchParams(location.search);
+    const topLevel = window.self === window.top;
+    sel.onchange = () => { params.set('d', sel.value); location.search = '?' + params.toString(); };
+    if (topLevel || params.get('picker') === '1') document.getElementById('depRow').style.display = '';
+    if (topLevel) document.getElementById('backLink').style.display = '';   // full-screen: way back to the site
     D = await fetch(`data/${encodeURIComponent(name)}.json`).then(r => r.json());
   }
   const CMAPS = __CMAPS__;
