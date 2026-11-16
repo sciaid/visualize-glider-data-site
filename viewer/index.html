@@ -33,7 +33,8 @@
 </style></head>
 <body><div id="app">
 <aside>
-  <div id="depRow" style="display:none;margin-bottom:8px"><select id="dep" style="width:100%"></select></div>
+  <a id="backLink" href="../index.html" style="display:none;font-size:12px;color:var(--accent);text-decoration:none">← Back to site</a>
+  <div id="depRow" style="display:none;margin:6px 0 8px"><select id="dep" style="width:100%"></select></div>
   <h1 id="title"></h1>
   <div class="muted" id="sub"></div>
 
@@ -93,8 +94,13 @@
     const name = idx.some(e => e.name === want) ? want : idx[0].name;
     const sel = document.getElementById('dep');
     idx.forEach(e => sel.add(new Option(`${e.name}  (${e.start} → ${e.end})`, e.name, false, e.name === name)));
-    sel.onchange = () => { location.search = '?d=' + encodeURIComponent(sel.value); };
-    if (window.self === window.top) document.getElementById('depRow').style.display = '';   // hidden when embedded in a page
+    // Picker: shown when opened on its own, or embedded with ?picker=1 (the site's Curtain viewer page).
+    // Hidden on deployment pages, where the page fixes the deployment.
+    const params = new URLSearchParams(location.search);
+    const topLevel = window.self === window.top;
+    sel.onchange = () => { params.set('d', sel.value); location.search = '?' + params.toString(); };
+    if (topLevel || params.get('picker') === '1') document.getElementById('depRow').style.display = '';
+    if (topLevel) document.getElementById('backLink').style.display = '';   // full-screen: way back to the site
     D = await fetch(`data/${encodeURIComponent(name)}.json`).then(r => r.json());
   }
   const CMAPS = {"thermal": ["#042333", "#0f326a", "#40349f", "#674396", "#8b538d", "#b15f82", "#d66c6c", "#f3824d", "#fca63c", "#f7d045", "#e8fa5b"], "haline": ["#2a186c", "#2927a2", "#0d4e96", "#18668c", "#2b7b88", "#3a9087", "#4aa584", "#62ba7b", "#89cd6d", "#bfdc6c", "#fdef9a"], "algae": ["#d7f9d0", "#b2e3a5", "#8ecf7c", "#66bb58", "#3ba83f", "#17923b", "#0d7a3f", "#11633b", "#134d33", "#11372a", "#0b2219"], "oxy": ["#400505", "#6f0c0b", "#930d0d", "#606060", "#7c7c7b", "#999998", "#b8b7b6", "#d8d7d5", "#ebe952", "#dbbf23", "#dcaf00"], "deep": ["#fdfecc", "#c3eaa9", "#8cd5a1", "#62bba2", "#4ea0a0", "#43859d", "#3e6a98", "#424f8d", "#3e3b6a", "#2f2a47", "#281a2c"], "dense": ["#e6f1f1", "#bbd8e0", "#93bfd8", "#749fd5", "#6f7dcf", "#7059b8", "#6c3a96", "#5f2171", "#4a1550", "#300e31", "#360e24"], "tempo": ["#fff6f4", "#d8ddcb", "#b1c6a6", "#87b08d", "#5d9b7f", "#348378", "#1c6b6f", "#185263", "#183b52", "#162540", "#151d44"], "viridis": ["#440154", "#482878", "#3e4989", "#31688e", "#26828e", "#1f9e89", "#35b779", "#6ece58", "#b5de2b", "#fde725", "#fde725"], "rainbow": ["#00007f", "#0000ff", "#0063ff", "#00d4ff", "#4effa9", "#a9ff4e", "#ffe600", "#ff7a00", "#ff1400", "#b20000", "#7f0000"]};

@@ -14,7 +14,7 @@ website:
         text: Overview
       - href: deployments.qmd
         text: Deployments
-      - href: viewer/index.html
+      - href: viewer.qmd
         text: Curtain viewer
       - href: methods.qmd
         text: Methods
