@@ -10,6 +10,8 @@ toc: false
 
 **Area:** 62.15–62.72°S, 58.09–58.97°W
 
+**Data:** SWFSC ESD processed (L3) file
+
 <iframe src="../viewer/index.html?d=amlr02-20251123" title="3D curtain viewer: amlr02-20251123"
         style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 

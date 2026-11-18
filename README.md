@@ -86,6 +86,13 @@ more than one region is present, the map gets a Region filter (opening on the re
 most deployments), the Deployments page is grouped by region, and the viewer's picker is
 grouped too. Edit the boxes or names freely, then rerun the build.
 
+### Project labels
+
+`projects.json` maps the start of each file's `project` attribute to the short label shown on
+the site, e.g. "CalCOFI Survey Augmentation" → "CalCOFI Augmentation". The full name stays on
+each deployment page. Unlisted projects are shortened to the text before any colon. Edit the
+list and rerun the build; the labels update without reprocessing any data.
+
 ### Bathymetry
 
 Put one GEBCO grid per region (download at [download.gebco.net](https://download.gebco.net),
