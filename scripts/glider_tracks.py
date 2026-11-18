@@ -226,6 +226,16 @@ def assign_region(lat, lon, regions, default="Other"):
     return default
 
 
+def read_map_tracks(path):
+    """Deployments embedded in an existing map page (to keep tracks whose files are absent)."""
+    import re as _re
+    p = Path(path)
+    if not p.exists():
+        return []
+    m = _re.search(r'<script id="data" type="application/json">(.*?)</script>', p.read_text(encoding="utf-8"), _re.S)
+    return json.loads(m.group(1).replace("<\\/", "</"))["deployments"] if m else []
+
+
 def iso(t):
     return dt.datetime.fromtimestamp(float(t), dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -237,7 +247,7 @@ def decimate(n, max_points):
 
 
 def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_template=None, map_name="glider_map.html",
-          regions=None, extra=None):
+          regions=None, extra=None, keep_tracks=None):
     files = []
     for p in paths:
         p = Path(p)
@@ -315,6 +325,9 @@ def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_t
                         *[f"{b:.5f}" for b in d["bounds"]]])
 
     map_path = out_dir / map_name
+    built = {d["name"] for d in deployments}
+    deployments += [d for d in (keep_tracks or []) if d["name"] not in built]   # tracks from earlier runs
+    deployments.sort(key=lambda d: d["start"])
     if link_template:
         for d in deployments:
             d["link"] = link_template.replace("{name}", d["name"])

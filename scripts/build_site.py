@@ -111,8 +111,9 @@ def file_meta(path):
         mode = str(getattr(ds, "data_mode", "") or "").strip()
         src_id = str(getattr(ds, "source_dataset", "") or "").strip()
         src_url = str(getattr(ds, "source_url", "") or "").strip()
+        modified = str(getattr(ds, "date_modified", "") or "").strip()[:10] if src_id else ""
     return {"name": name, "project": short_project(full), "projectFull": full,
-            "mode": mode, "sourceDataset": src_id, "sourceUrl": src_url}
+            "mode": mode, "sourceDataset": src_id, "sourceUrl": src_url, "modified": modified}
 
 
 def is_gridded(path):
@@ -139,8 +140,9 @@ it is published.
 
 def fmt_source(e):
     if e.get("sourceUrl"):
-        return f"[{e['sourceDataset']}]({e['sourceUrl']}) on the IOOS Glider DAC ERDDAP" + \
-               (" (real-time)" if e.get("mode") == "realtime" else "")
+        return (f"[{e['sourceDataset']}]({e['sourceUrl']}) on the IOOS Glider DAC ERDDAP"
+                + (" (real-time)" if e.get("mode") == "realtime" else "")
+                + (f", last modified {e['modified']}" if e.get("modified") else ""))
     return "SWFSC ESD processed (L3) file"
 
 
@@ -185,6 +187,53 @@ def walk_nc(folder):
     return sorted(out)
 
 
+def write_realtime(index, data_dir):
+    """realtime.qmd: deployments shown from real-time data, with latest position and data age."""
+    import datetime as dt
+    now = dt.datetime.now(dt.timezone.utc)
+    rows = []
+    for e in sorted((e for e in index if e.get("mode") == "realtime"), key=lambda e: e["end"], reverse=True):
+        try:
+            d = json.loads((data_dir / f"{e['name']}.json").read_text(encoding="utf-8"))
+            last_t = dt.datetime.fromtimestamp(d["time"][-1], dt.timezone.utc)
+            la, lo = d["lat"][-1], d["lon"][-1]
+            pos = f"{abs(la):.3f}°{'N' if la >= 0 else 'S'}, {abs(lo):.3f}°{'E' if lo >= 0 else 'W'}"
+            age = (now - last_t).total_seconds() / 86400
+            through, ago = last_t.strftime("%Y-%m-%d %H:%M UTC"), f"{age:.1f}"
+        except (OSError, KeyError, IndexError, ValueError):
+            pos, through, ago = "", e["end"], ""
+        rows.append(f"| [{e['name']}](deployments/{e['name']}.qmd) | {e.get('region', '')} | {e.get('project', '')} "
+                    f"| {e['start']} | {through} | {ago} | {pos} | {e['profiles']:,} |")
+    body = ("| Deployment | Region | Project | Start | Data through | Days since last data | Latest position | Profiles |\n"
+            "|---|---|---|---|---|---|---|---|\n" + "\n".join(rows)) if rows else \
+        "No deployments are currently shown from real-time data."
+    (ROOT / "realtime.qmd").write_text(f"""---
+title: "Real-time deployments"
+page-layout: full
+---
+
+Deployments for which only **real-time (provisional)** data are published on the
+[IOOS Glider DAC ERDDAP](https://gliders.ioos.us/erddap/). Real-time data are thinned, not
+quality-controlled and may have gaps; ERDDAP is updated every few days while a glider is out.
+Each deployment moves to delayed-mode data automatically when that is published.
+
+{{{{< include _status.md >}}}}
+
+{body}
+""", encoding="utf-8")
+
+
+def write_status(status, index):
+    """_status.md: when ERDDAP was last checked (shown on the home and real-time pages)."""
+    n = sum(1 for e in index if e.get("sourceDataset"))
+    msg = f"*ERDDAP last checked: {status.get('checked', 'unknown')} · {n} deployments from ERDDAP"
+    if status.get("listing_failed"):
+        msg += " · ERDDAP could not be reached; showing the previous data"
+    elif status.get("errors"):
+        msg += f" · {len(status['errors'])} dataset(s) could not be updated"
+    (ROOT / "_status.md").write_text(msg + "*\n", encoding="utf-8")
+
+
 def fingerprint(path, chunk=1 << 20):
     """Size + SHA-1 of the first and last MB: cheap, and the same on any computer."""
     p = Path(path)
@@ -202,6 +251,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("nc_dirs", nargs="+", help="folder(s) with the glider *.nc files (searched recursively)")
     ap.add_argument("--force", action="store_true", help="rebuild every deployment, not just new or changed ones")
+    ap.add_argument("--erddap-status", default=None,
+                    help="status.json written by fetch_erddap.py: shown as 'ERDDAP last checked' on the site")
     ap.add_argument("--prune", action="store_true",
                     help="drop deployments whose NetCDF file is not in the given folders")
     a = ap.parse_args()
@@ -227,7 +278,7 @@ def main():
             by_name[m["name"]] = f
     files = sorted(by_name.values())
     if not files:
-        sys.exit(f"No glider NetCDF files found in {a.nc_dirs}")
+        print(f"No glider NetCDF files found in {a.nc_dirs}; keeping the deployments already on the site.")
     regions = glider_tracks.load_regions(ROOT / "regions.json")
     data_dir = ROOT / "viewer" / "data"
     idx_path = data_dir / "index.json"
@@ -247,9 +298,16 @@ def main():
 
     # 2. Overview map (always rebuilt from all files: a single small page)
     print("\n== Overview map ==")
-    glider_tracks.build(files, ROOT / "map", "measurement", "auto", 2000, 1, "Glider deployments",
-                        link_template="../deployments/{name}.html", map_name="index.html", regions=regions,
-                        extra={m["name"]: m for m in meta.values()})
+    # Keep tracks of deployments already on the site whose files are not here (e.g. local
+    # Antarctic files during a GitHub build, or ERDDAP deployments during a local build).
+    present = {m["name"] for m in meta.values()}
+    on_site = {e["name"] for e in index}
+    previous = [d for d in glider_tracks.read_map_tracks(ROOT / "map" / "index.html")
+                if d["name"] in on_site and d["name"] not in present]
+    if files:
+      glider_tracks.build(files, ROOT / "map", "measurement", "auto", 2000, 1, "Glider deployments",
+                          link_template="../deployments/{name}.html", map_name="index.html", regions=regions,
+                          extra={m["name"]: m for m in meta.values()}, keep_tracks=previous)
     for extra in ("glider_positions.csv", "deployments_summary.csv"):
         (ROOT / "map" / extra).unlink(missing_ok=True)
 
@@ -259,7 +317,7 @@ def main():
                     if any(k in p.name.lower() for k in BATHY_KEYS)})
     bathy_arg = ",".join(grids) or "none"
     glider_curtain.main(todo + ["--site", str(ROOT / "viewer"), "--bathy", bathy_arg] if todo else
-                        [files[0], "--site", str(ROOT / "viewer"), "--bathy", "none", "--viewer-only"])
+                        ["none", "--site", str(ROOT / "viewer"), "--bathy", "none", "--viewer-only"])
 
     # 4. Record fingerprints and regions; optionally prune
     index = json.loads(idx_path.read_text())
@@ -268,7 +326,7 @@ def main():
         if e.get("file") in by_file:
             f = by_file[e["file"]]
             e["fingerprint"] = fps[f]
-            for k in ("project", "projectFull", "mode", "sourceDataset", "sourceUrl"):
+            for k in ("project", "projectFull", "mode", "sourceDataset", "sourceUrl", "modified"):
                 e[k] = meta[f][k]
         la = (e["latRange"][0] + e["latRange"][1]) / 2
         lo = (e["lonRange"][0] + e["lonRange"][1]) / 2
@@ -311,6 +369,9 @@ def main():
         f"{len(index)} deployments. Click a name for its 3D curtain, depth-time section and T–S diagram.\n\n"
         + "\n".join(parts), encoding="utf-8")
     write_summary(index)
+    write_realtime(index, data_dir)
+    if a.erddap_status and Path(a.erddap_status).exists():
+        write_status(json.loads(Path(a.erddap_status).read_text(encoding="utf-8")), index)
     print(f"Wrote {len(index)} deployment pages. Next: commit and push (or open a pull request).")
 
 

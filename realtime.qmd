@@ -1,0 +1,13 @@
+---
+title: "Real-time deployments"
+page-layout: full
+---
+
+Deployments for which only **real-time (provisional)** data are published on the
+[IOOS Glider DAC ERDDAP](https://gliders.ioos.us/erddap/). Real-time data are thinned, not
+quality-controlled and may have gaps; ERDDAP is updated every few days while a glider is out.
+Each deployment moves to delayed-mode data automatically when that is published.
+
+{{< include _status.md >}}
+
+No deployments are currently shown from real-time data.

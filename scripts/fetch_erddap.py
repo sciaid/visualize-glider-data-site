@@ -7,12 +7,16 @@ build treats them exactly like local files.
     python scripts/fetch_erddap.py "C:\\Claude_work\\PROJECTS\\Glider L-3 ncfiles"
 
 Rules
-  * Only datasets from INSTITUTIONS below (the older "Antarctic Ecosystem Research Division"
-    datasets are deliberately not included).
+  * Only datasets from the institutions in erddap.json (the older "Antarctic Ecosystem Research
+    Division" datasets are deliberately not included).
   * One dataset per deployment: delayed-mode ("...-delayed") if it exists, otherwise real-time.
     When the delayed dataset appears, the real-time grid is deleted and replaced.
   * A deployment that already has a local gridded file anywhere under the folder (matched on its
-    deployment_name, e.g. "calanus-20260824") is skipped: local files win.
+    deployment_name, e.g. "calanus-20260824") is skipped: local files win. With --repo-index, so are
+    deployments already published on the site from a local file (needed on GitHub, where the local
+    files are absent), unless listed in erddap.json "replace_local_with_erddap".
+  * A failed download keeps the deployment's previous grid; if ERDDAP cannot be reached at all,
+    nothing changes. Problems are recorded in <folder>/ERDDAP/status.json.
   * Datasets are re-downloaded only when ERDDAP reports a change (date_modified or maxTime),
     tracked in <folder>/ERDDAP/manifest.json. Raw downloads are deleted after gridding.
 
@@ -222,26 +226,67 @@ def write_grid(g, info, row, url, path):
 
 
 # --------------------------------------------------------------------------- #
+def load_config():
+    """erddap.json in the repository: institutions to include, and deployments published from local
+    files that may be replaced by their ERDDAP version (listed by name, or "*" for all)."""
+    p = Path(__file__).resolve().parent.parent / "erddap.json"
+    cfg = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    cfg.setdefault("institutions", INSTITUTIONS)
+    cfg.setdefault("replace_local_with_erddap", [])
+    return cfg
+
+
+def locked_deployments(repo_index, allow):
+    """Deployments already on the site from a local file (no sourceDataset in index.json). ERDDAP
+    never replaces these unless they are listed in replace_local_with_erddap."""
+    if not repo_index or not Path(repo_index).exists():
+        return {}
+    out = {}
+    for e in json.loads(Path(repo_index).read_text(encoding="utf-8")):
+        if not e.get("sourceDataset") and "*" not in allow and e["name"] not in allow:
+            out[e["name"]] = e.get("file") or "published from a local file"
+    return out
+
+
 def main(argv=None):
+    import datetime as dt
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("nc_dir", help="root folder of the glider files; grids go to <nc_dir>/ERDDAP")
+    ap.add_argument("--repo-index", default=None,
+                    help="the site's viewer/data/index.json: deployments published from local files are "
+                         "not replaced by ERDDAP versions (see erddap.json)")
     ap.add_argument("--dry-run", action="store_true", help="list what would be downloaded, change nothing")
     ap.add_argument("--force", action="store_true", help="re-download every selected dataset")
     a = ap.parse_args(argv)
 
+    cfg = load_config()
     root = Path(a.nc_dir)
     out_dir = root / "ERDDAP"
-    manifest_path = out_dir / "manifest.json"
+    manifest_path, status_path = out_dir / "manifest.json", out_dir / "status.json"
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    status = {"checked": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "errors": []}
 
-    chosen = choose(list_datasets())
-    local = local_deployments(root, out_dir)
-    print(f"{len(chosen)} deployments on ERDDAP; {len(local)} local gridded files")
+    def save_status():
+        if not a.dry_run:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            status_path.write_text(json.dumps(status, indent=1), encoding="utf-8")
+
+    try:
+        chosen = choose(list_datasets(cfg["institutions"]))
+    except Exception as exc:                      # ERDDAP unreachable: keep every existing grid
+        status["errors"].append(f"listing datasets failed: {exc}")
+        status["listing_failed"] = True
+        print(f"ERDDAP listing failed ({exc}); keeping existing grids unchanged.")
+        save_status()
+        return 0
+    local = {**locked_deployments(a.repo_index, cfg["replace_local_with_erddap"]),
+             **{k: Path(v).name for k, v in local_deployments(root, out_dir).items()}}
+    print(f"{len(chosen)} deployments on ERDDAP; {len(local)} published from local files")
 
     plan = []
     for dep, row in sorted(chosen.items()):
         if dep in local:
-            print(f"  {dep:28s} local file wins ({Path(local[dep]).name})")
+            print(f"  {dep:28s} local file wins ({local[dep]})")
             continue
         prev = manifest.get(dep, {})
         changed = (a.force or prev.get("datasetID") != row["datasetID"]
@@ -257,31 +302,48 @@ def main(argv=None):
         print(f"  remove {p.name}")
     if a.dry_run:
         print(f"\nDry run: {len(plan)} to download, {len(stale)} to remove.")
-        return
+        return 0
 
-    out_dir.mkdir(exist_ok=True)
-    for p in stale:
-        p.unlink()
-        manifest = {d: m for d, m in manifest.items() if m.get("file") != p.name}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    done = 0
     for row in plan:
         dep, did = row["deployment"], row["datasetID"]
-        info = dataset_info(did)
-        want = BASE_VARS + [v for v in SAMPLE_VARS if v in info["variables"]]
         raw = out_dir / f"_download_{did}.nc"
-        print(f"\nDownloading {did} ({len(want)} variables) ...")
-        url = download(did, want, raw)
-        g = grid_dac(raw, [v for v in SAMPLE_VARS if v in info["variables"]])
-        fill_density(g)
-        name = f"{dep}_erddap-{row['mode']}-5m.nc"
-        write_grid(g, info, row, url, out_dir / name)
-        raw.unlink()
+        try:
+            info = dataset_info(did)
+            want = BASE_VARS + [v for v in SAMPLE_VARS if v in info["variables"]]
+            print(f"\nDownloading {did} ({len(want)} variables) ...")
+            url = download(did, want, raw)
+            g = grid_dac(raw, [v for v in SAMPLE_VARS if v in info["variables"]])
+            fill_density(g)
+            name = f"{dep}_erddap-{row['mode']}-5m.nc"
+            write_grid(g, info, row, url, out_dir / name)
+        except Exception as exc:                  # keep the previous grid of this deployment, if any
+            status["errors"].append(f"{did}: {exc}")
+            print(f"  FAILED: {exc} (keeping the previous version, if any)")
+            continue
+        finally:
+            raw.unlink(missing_ok=True)
+        # a delayed grid replaces the real-time one only once it exists
+        for p in out_dir.glob(f"{dep}_erddap-*-5m.nc"):
+            if p.name != name:
+                p.unlink()
         manifest[dep] = {"datasetID": did, "mode": row["mode"], "maxTime": row["maxTime"],
                          "date_modified": info["globals"].get("date_modified", ""), "file": name}
-        print(f"  {g['profile'].size} profiles x {g['depth'].size} bins -> {name}")
         manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+        done += 1
+        print(f"  {g['profile'].size} profiles x {g['depth'].size} bins -> {name}")
+    for p in stale:                               # deployments now local or gone from ERDDAP
+        dep = p.name.split("_erddap-")[0]
+        if dep in local or dep not in chosen:
+            p.unlink(missing_ok=True)
+            manifest.pop(dep, None)
     manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
-    print(f"\nDone: {len(plan)} downloaded, {len(stale)} removed. Next: python scripts/build_site.py \"{root}\"")
+    status.update({"downloaded": done, "deployments": sorted(m["file"] for m in manifest.values())})
+    save_status()
+    print(f"\nDone: {done} downloaded, {len(status['errors'])} failed.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -30,7 +30,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr01-20181216",
@@ -63,7 +64,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr02-20191206",
@@ -96,7 +98,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr03-20191206",
@@ -129,7 +132,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr01-20191216",
@@ -162,7 +166,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr01-20211121",
@@ -195,7 +200,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr05-20211124",
@@ -228,7 +234,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr07-20221204",
@@ -261,7 +268,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr04-20221205",
@@ -294,7 +302,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr06-20221205",
@@ -327,7 +336,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr03-20231128",
@@ -360,7 +370,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr04-20231128",
@@ -393,7 +404,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr01-20241120",
@@ -426,7 +438,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr08-20241120",
@@ -459,7 +472,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr02-20251123",
@@ -492,7 +506,8 @@
   "projectFull": "FREEBYRD",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  },
  {
   "name": "amlr30-20260114",
@@ -525,6 +540,7 @@
   "projectFull": "FREEBYRD: Estimate Antarctic krill biomass in support of CCAMLR",
   "mode": "",
   "sourceDataset": "",
-  "sourceUrl": ""
+  "sourceUrl": "",
+  "modified": ""
  }
 ]
