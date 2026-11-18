@@ -53,6 +53,22 @@ Then commit and push (or open a pull request). The site rebuilds itself.
   built from all files found, so keep every deployment's file available when rebuilding.
   `--prune` removes deployments whose file is no longer in the folders.
 
+### Daily build from ERDDAP (automatic)
+
+`.github/workflows/publish.yml` runs every day (and on every push to `main`, and on demand from
+**Actions → Publish site → Run workflow**). It downloads new or updated datasets from the IOOS
+Glider DAC ERDDAP, builds their pages and publishes the site. Nothing needs to run on your computer.
+
+- **ERDDAP deployments are built on GitHub and not committed**, so the repository does not grow;
+  the gridded downloads are kept in GitHub's cache between runs.
+- **Deployments published from local L3 files are never replaced** by their ERDDAP versions. To
+  switch one over, add its name to `replace_local_with_erddap` in `erddap.json` (or `"*"` for all).
+- **Failures don't break the site**: a dataset that fails keeps its previous version; if ERDDAP is
+  down, nothing changes. The run is then marked failed (GitHub emails you) and the home page says so.
+- The home and **Real-time** pages show when ERDDAP was last checked.
+- Seafloor grids for the GitHub build are in `bathymetry/` (see its README).
+- Pull requests run the same build, including a real ERDDAP download, without publishing.
+
 ### Deployments from ERDDAP
 
 `scripts/fetch_erddap.py` downloads deployments from the

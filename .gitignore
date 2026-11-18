@@ -2,6 +2,8 @@
 /.quarto/
 __pycache__/
 *.nc
+!bathymetry/*.nc
 *.pdf
+/.erddap-cache/
 
 **/*.quarto_ipynb

@@ -1,26 +1,64 @@
-# Renders the Quarto site and publishes it to GitHub Pages on every push to main.
+# Builds and publishes the site.
+#   - on every push to main
+#   - daily, to pick up new or updated glider datasets on the IOOS Glider DAC ERDDAP
+#   - on demand (Actions > Publish site > Run workflow)
+#   - on pull requests: full build including a real ERDDAP download, but nothing is published
 # One-time setup on GitHub: Settings > Pages > Build and deployment > Source: "GitHub Actions".
 name: Publish site
 
 on:
   push:
     branches: [main]
+  pull_request:
+  schedule:
+    - cron: "37 13 * * *"      # daily, 13:37 UTC (5:37 am Pacific standard time)
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write              # only used by the keep-alive step below
   pages: write
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      erddap_errors: ${{ steps.erddap.outputs.errors }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+
+      # Gridded ERDDAP downloads, kept between runs so only new or changed datasets are fetched
+      - uses: actions/cache@v4
+        with:
+          path: .erddap-cache
+          key: erddap-${{ github.run_id }}
+          restore-keys: erddap-
+
+      - name: Download new or updated datasets from ERDDAP
+        id: erddap
+        run: |
+          python scripts/fetch_erddap.py .erddap-cache --repo-index viewer/data/index.json
+          python - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          p = pathlib.Path(".erddap-cache/ERDDAP/status.json")
+          s = json.loads(p.read_text()) if p.exists() else {"errors": ["no status written"]}
+          print(f"errors={len(s.get('errors', []))}")
+          EOF
+
+      - name: Build site data (ERDDAP deployments are built here, not committed)
+        run: python scripts/build_site.py .erddap-cache bathymetry --erddap-status .erddap-cache/ERDDAP/status.json
+
       - uses: quarto-dev/quarto-actions/setup@v2
       - name: Render
         run: quarto render
@@ -28,8 +66,21 @@ jobs:
         with:
           path: _site
 
+      # GitHub disables scheduled workflows after 60 days without repository activity.
+      - name: Keep the daily schedule alive
+        if: github.event_name == 'schedule'
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $(( 50 * 86400 )) ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Keep the daily site build active"
+            git push
+          fi
+
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -37,3 +88,17 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Runs after publishing: fails (so GitHub emails you) if any ERDDAP dataset could not be updated.
+  # The site is still published with the previous version of those datasets.
+  report:
+    needs: [build, deploy]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report ERDDAP problems
+        run: |
+          echo "ERDDAP problems: ${{ needs.build.outputs.erddap_errors }}"
+          test "${{ needs.build.outputs.erddap_errors }}" = "0" || {
+            echo "Some ERDDAP datasets could not be updated; see the build log ('Download new or updated datasets')."
+            exit 1; }
