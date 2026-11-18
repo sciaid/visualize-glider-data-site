@@ -4,9 +4,11 @@ page-layout: full
 toc: false
 ---
 
-| Region | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day | Area |
+| Region | Project | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |
 |---|---|---|---|---|---|---|---|---|
-| Antarctic Peninsula | amlr04 | 2023-11-28 | 2024-01-27 | 1,122 | 918 m | ≈ 1,400 km | ≈ 23 km/day | -63.88° to -62.19°, -62.19° to -57.17° |
+| Antarctic Peninsula | FREEBYRD | amlr04 | 2023-11-28 | 2024-01-27 | 1,122 | 918 m | ≈ 1,400 km | ≈ 23 km/day |
+
+**Area:** 62.19–63.88°S, 57.17–62.19°W
 
 <iframe src="../viewer/index.html?d=amlr04-20231128" title="3D curtain viewer: amlr04-20231128"
         style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>

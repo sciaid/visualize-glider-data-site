@@ -12,6 +12,8 @@ has data); click a track and choose
 **Open 3D curtain** to explore temperature, salinity, chlorophyll and oxygen along that
 deployment.
 
+{{< include _summary.md >}}
+
 <iframe src="map/index.html" title="Map of glider deployments"
         style="width:100%; height:72vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 
