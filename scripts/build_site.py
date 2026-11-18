@@ -84,9 +84,26 @@ def fmt_per_day(e):
 
 
 
+def load_project_names():
+    """projects.json: [{"starts_with": <start of the file's project attribute>, "short": <label>}]."""
+    p = ROOT / "projects.json"
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
+
+
+PROJECT_NAMES = load_project_names()
+
+
+def short_project(full):
+    """Short label for a project: first matching entry in projects.json (case-insensitive
+    'starts with'), otherwise the text before any ':' ("FREEBYRD: Estimate ..." -> "FREEBYRD")."""
+    for entry in PROJECT_NAMES:
+        if full.lower().startswith(entry["starts_with"].lower()):
+            return entry["short"]
+    return full.split(":")[0].strip()
+
+
 def file_meta(path):
-    """Deployment name and project from a file's global attributes (cheap: no data read).
-    Project is shortened to the text before any ':' ("FREEBYRD: Estimate ..." -> "FREEBYRD")."""
+    """Deployment name and project from a file's global attributes (cheap: no data read)."""
     import netCDF4
     with netCDF4.Dataset(path) as ds:
         name = str(getattr(ds, "deployment_name", "") or Path(path).stem).strip()
@@ -94,7 +111,7 @@ def file_meta(path):
         mode = str(getattr(ds, "data_mode", "") or "").strip()
         src_id = str(getattr(ds, "source_dataset", "") or "").strip()
         src_url = str(getattr(ds, "source_url", "") or "").strip()
-    return {"name": name, "project": full.split(":")[0].strip(), "projectFull": full,
+    return {"name": name, "project": short_project(full), "projectFull": full,
             "mode": mode, "sourceDataset": src_id, "sourceUrl": src_url}
 
 
