@@ -164,7 +164,7 @@
   legend.onAdd = () => {
     const div = L.DomUtil.create('div', 'legend');
     div.innerHTML = '<div style="font-weight:600">Start year</div>' +
-      years.map(y => `<div><span class="bar" style="background:${yearColor[y]}"></span>${y}</div>`).join('') +
+      years.map(y => `<div data-year="${y}"><span class="bar" style="background:${yearColor[y]}"></span>${y}</div>`).join('') +
       `<div><span class="bar" style="background:${HL}"></span>hovered</div>`;
     return div;
   };
@@ -182,12 +182,26 @@
   });
   // Regions: shown only when deployments span more than one region. Changing it re-fits the map.
   const regions = [...new Set(deps.map(d => d.region).filter(Boolean))].sort();
-  // Open on the region with the most deployments; the others are one click away (counts on the chips).
-  const count = r => deps.filter(d => d.region === r).length;
-  const selRegions = new Set(regions.length > 1 ? [regions.reduce((a, r) => count(r) > count(a) ? r : a)] : regions);
+  // Starting region: ?region=<name> (or ?region=All), else the region with the most recent data.
+  // ?regionbar=1 means the host page shows its own region buttons, so the sidebar section is hidden.
+  const params = new URLSearchParams(location.search);
+  const latest = r => Math.max(...deps.filter(d => d.region === r).map(d => d.end));
+  const asked = params.get('region');
+  const start = asked === 'All' ? regions : regions.includes(asked) ? [asked]
+              : regions.length ? [regions.reduce((a, r) => latest(r) > latest(a) ? r : a)] : [];
+  const selRegions = new Set(regions.length > 1 ? start : regions);
   const regionsEl = document.getElementById('regions');
+  // Called by the overview page's region buttons (same origin): name or 'All'.
+  window.setRegion = r => {
+    selRegions.clear();
+    (r === 'All' ? regions : [r]).forEach(x => selRegions.add(x));
+    render(); fit(visible());
+  };
+  const tellHost = () => {
+    try { parent.postMessage({ glidermapRegion: selRegions.size === regions.length ? 'All' : [...selRegions][0] }, '*'); } catch (e) {}
+  };
   if (regions.length > 1) {
-    document.getElementById('regionSec').style.display = '';
+    if (params.get('regionbar') !== '1') document.getElementById('regionSec').style.display = '';
     regions.forEach(r => {
       const chip = document.createElement('span');
       chip.className = 'chip'; chip.textContent = `${r} (${deps.filter(d => d.region === r).length})`; chip.dataset.region = r;
@@ -208,7 +222,7 @@
     document.getElementById('projectSec').style.display = '';
     projects.forEach(pj => {
       const chip = document.createElement('span');
-      chip.className = 'chip'; chip.textContent = `${pj} (${deps.filter(d => d.project === pj).length})`; chip.dataset.project = pj;
+      chip.className = 'chip'; chip.appendChild(document.createTextNode(pj)); chip.dataset.project = pj;
       chip.onclick = () => { selProjects.has(pj) ? selProjects.delete(pj) : selProjects.add(pj); render(); };
       projectsEl.appendChild(chip);
     });
@@ -233,8 +247,21 @@
 
   const listEl = document.getElementById('list');
   function render() {
-    [...yearsEl.children].forEach(c => c.classList.toggle('off', !selYears.has(+c.dataset.year)));
+    // Year and project chips list only what occurs in the selected region(s).
+    const inReg = deps.filter(inRegion);
+    const regYears = new Set(inReg.flatMap(d => d.years)), regProjects = new Set(inReg.map(d => d.project));
+    [...yearsEl.children].forEach(c => {
+      c.classList.toggle('off', !selYears.has(+c.dataset.year));
+      c.style.display = regYears.has(+c.dataset.year) ? '' : 'none';
+    });
+    [...projectsEl.children].forEach(c => {
+      c.style.display = regProjects.has(c.dataset.project) ? '' : 'none';
+      c.lastChild.textContent = `${c.dataset.project} (${inReg.filter(d => d.project === c.dataset.project).length})`;
+    });
+    document.querySelectorAll('.legend [data-year]').forEach(el => el.style.display = regYears.has(+el.dataset.year) ? '' : 'none');
+    document.getElementById('projectSec').style.display = projects.length > 1 && regProjects.size > 1 ? '' : 'none';
     [...regionsEl.children].forEach(c => c.classList.toggle('off', !selRegions.has(c.dataset.region)));
+    if (regions.length > 1) tellHost();
     [...projectsEl.children].forEach(c => c.classList.toggle('off', !selProjects.has(c.dataset.project)));
     const s = shown(), v = new Set(visible());
     listEl.innerHTML = '';

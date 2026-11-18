@@ -46,8 +46,9 @@ import netCDF4
 ERDDAP = "https://gliders.ioos.us/erddap"
 INSTITUTIONS = ["NOAA National Marine Fisheries Service Southwest Fisheries Science Center"]
 # Variables downloaded (only those present in each dataset are requested)
-SAMPLE_VARS = ["temperature", "salinity", "chlorophyll", "oxygen_concentration",
+SAMPLE_VARS = ["temperature", "salinity", "chlorophyll", "oxygen_concentration", "cdom", "backscatter_700",
                "potential_temperature", "potential_density", "pressure"]
+OPTIONAL_VARS = ["chlorophyll", "oxygen_concentration", "cdom", "backscatter_700"]   # sensor-dependent
 BASE_VARS = ["profile_id", "time", "latitude", "longitude", "depth"]
 KEEP_ATTRS = ["project", "institution", "creator_name", "summary", "title", "glider_name",
               "platform_type", "wmo_id", "date_modified", "license", "acknowledgment"]
@@ -55,8 +56,8 @@ DZ, MAX_DEPTH = 5.0, 1200.0
 # Real-time grids also keep the individual samples (as transmitted) of these variables, so the
 # viewer can plot them as points. Bump FORMAT when the grid file layout changes: grids written
 # with an older FORMAT are downloaded again on the next run.
-SAMPLE_PLOT_VARS = ["temperature", "salinity", "chlorophyll", "oxygen_concentration"]
-FORMAT = 2
+SAMPLE_PLOT_VARS = ["temperature", "salinity", "chlorophyll", "oxygen_concentration", "cdom", "backscatter_700"]
+FORMAT = 3
 BATHY_KEYS = ("gebco", "etopo", "bathy")
 ID_RE = re.compile(r"^(?P<base>.+?-\d{8})T\d{4}(?P<delayed>-delayed)?$")
 
@@ -357,6 +358,9 @@ def main(argv=None):
             info = dataset_info(did)
             want = BASE_VARS + [v for v in SAMPLE_VARS if v in info["variables"]]
             print(f"\nDownloading {did} ({len(want)} variables) ...")
+            missing = [v for v in OPTIONAL_VARS if v not in info["variables"]]
+            if missing:
+                print(f"  not in this dataset: {', '.join(missing)}")
             url = download(did, want, raw)
             g = grid_dac(raw, [v for v in SAMPLE_VARS if v in info["variables"]])
             fill_density(g)

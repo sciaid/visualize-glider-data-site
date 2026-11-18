@@ -61,6 +61,8 @@ toc: false
 
 **Data:** {source}
 
+**Sensors:** {sensors}
+
 <iframe src="../viewer/index.html?d={name}" title="3D curtain viewer: {name}"
         style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 
@@ -138,6 +140,18 @@ it is published.
 :::
 
 """
+
+
+def fmt_sensors(e):
+    """'Temperature, Salinity, Chlorophyll (31% of profiles), … · not measured: CDOM'."""
+    labels = e.get("varLabels") or e.get("vars") or []
+    cover = e.get("coverage") or [None] * len(labels)
+    parts = [f"{l} ({max(1, round(c * 100))}% of profiles)" if c is not None and c < 0.9 else l
+             for l, c in zip(labels, cover)]
+    out = ", ".join(parts)
+    if e.get("absent"):
+        out += " · not measured: " + ", ".join(e["absent"])
+    return out
 
 
 def fmt_source(e):
@@ -428,7 +442,7 @@ def main():
         page = DEPLOYMENT_PAGE.format(
             name=e["name"], region=e.get("region") or "", project=e.get("project") or "", distance=fmt_distance(e), per_day=fmt_per_day(e), glider=e.get("glider") or "",
             start=e["start"], end=e["end"], profiles=e["profiles"], maxDepth=e["maxDepth"],
-            area=fmt_area(e), source=fmt_source(e),
+            area=fmt_area(e), source=fmt_source(e), sensors=fmt_sensors(e),
             realtime_note=REALTIME_NOTE.format(end=e["end"]) if e.get("mode") == "realtime" else "",
             project_note=(f" · **Project:** {e['projectFull']}"
                           if e.get("projectFull") and e["projectFull"] != e.get("project") else ""))

@@ -40,6 +40,7 @@
 
   <h2>Variable</h2>
   <div class="seg" id="vars"></div>
+  <div class="muted" id="absent" style="margin-top:4px"></div>
 
   <h2>Colour</h2>
   <label class="line">Map <select id="cmap"></select></label>
@@ -55,6 +56,8 @@
 
   <h2>Vertical exaggeration <span id="exLabel" class="muted"></span></h2>
   <input type="range" id="ex" min="0" max="100" value="50">
+  <label class="line">Curtain <select id="style"><option value="surface">surface</option><option value="points">points (one per 5 m bin)</option></select></label>
+  <div class="muted" id="styleNote"></div>
   <label class="line"><input type="checkbox" id="track" checked> Show surface track</label>
   <div id="bathyCtl">
     <label class="line"><input type="checkbox" id="bathy" checked> Seafloor &amp; land</label>
@@ -103,15 +106,20 @@
     // Hidden on deployment pages, where the page fixes the deployment.
     const params = new URLSearchParams(location.search);
     const topLevel = window.self === window.top;
-    sel.onchange = () => { params.set('d', sel.value); location.search = '?' + params.toString(); };
+    sel.onchange = () => { params.set('d', sel.value); if (window.__curVar) params.set('v', window.__curVar()); location.search = '?' + params.toString(); };
     if (topLevel || params.get('picker') === '1') document.getElementById('depRow').style.display = '';
     if (topLevel) document.getElementById('backLink').style.display = '';   // full-screen: way back to the site
     D = await fetch(`data/${encodeURIComponent(name)}.json`).then(r => r.json());
   }
-  const CMAPS = {"thermal": ["#042333", "#0f326a", "#40349f", "#674396", "#8b538d", "#b15f82", "#d66c6c", "#f3824d", "#fca63c", "#f7d045", "#e8fa5b"], "haline": ["#2a186c", "#2927a2", "#0d4e96", "#18668c", "#2b7b88", "#3a9087", "#4aa584", "#62ba7b", "#89cd6d", "#bfdc6c", "#fdef9a"], "algae": ["#d7f9d0", "#b2e3a5", "#8ecf7c", "#66bb58", "#3ba83f", "#17923b", "#0d7a3f", "#11633b", "#134d33", "#11372a", "#0b2219"], "oxy": ["#400505", "#6f0c0b", "#930d0d", "#606060", "#7c7c7b", "#999998", "#b8b7b6", "#d8d7d5", "#ebe952", "#dbbf23", "#dcaf00"], "deep": ["#fdfecc", "#c3eaa9", "#8cd5a1", "#62bba2", "#4ea0a0", "#43859d", "#3e6a98", "#424f8d", "#3e3b6a", "#2f2a47", "#281a2c"], "dense": ["#e6f1f1", "#bbd8e0", "#93bfd8", "#749fd5", "#6f7dcf", "#7059b8", "#6c3a96", "#5f2171", "#4a1550", "#300e31", "#360e24"], "tempo": ["#fff6f4", "#d8ddcb", "#b1c6a6", "#87b08d", "#5d9b7f", "#348378", "#1c6b6f", "#185263", "#183b52", "#162540", "#151d44"], "viridis": ["#440154", "#482878", "#3e4989", "#31688e", "#26828e", "#1f9e89", "#35b779", "#6ece58", "#b5de2b", "#fde725", "#fde725"], "rainbow": ["#00007f", "#0000ff", "#0063ff", "#00d4ff", "#4effa9", "#a9ff4e", "#ffe600", "#ff7a00", "#ff1400", "#b20000", "#7f0000"]};
+  const CMAPS = {"thermal": ["#042333", "#0f326a", "#40349f", "#674396", "#8b538d", "#b15f82", "#d66c6c", "#f3824d", "#fca63c", "#f7d045", "#e8fa5b"], "haline": ["#2a186c", "#2927a2", "#0d4e96", "#18668c", "#2b7b88", "#3a9087", "#4aa584", "#62ba7b", "#89cd6d", "#bfdc6c", "#fdef9a"], "algae": ["#d7f9d0", "#b2e3a5", "#8ecf7c", "#66bb58", "#3ba83f", "#17923b", "#0d7a3f", "#11633b", "#134d33", "#11372a", "#0b2219"], "oxy": ["#400505", "#6f0c0b", "#930d0d", "#606060", "#7c7c7b", "#999998", "#b8b7b6", "#d8d7d5", "#ebe952", "#dbbf23", "#dcaf00"], "deep": ["#fdfecc", "#c3eaa9", "#8cd5a1", "#62bba2", "#4ea0a0", "#43859d", "#3e6a98", "#424f8d", "#3e3b6a", "#2f2a47", "#281a2c"], "dense": ["#e6f1f1", "#bbd8e0", "#93bfd8", "#749fd5", "#6f7dcf", "#7059b8", "#6c3a96", "#5f2171", "#4a1550", "#300e31", "#360e24"], "matter": ["#feedb0", "#faca90", "#f5a773", "#ee855e", "#e26253", "#ce4356", "#b32e5f", "#932063", "#721a60", "#4f1652", "#2f0f3e"], "turbid": ["#e9f6ab", "#dbd987", "#cfbc66", "#c4a14d", "#b58740", "#a1703b", "#8a5e3a", "#704d37", "#563e30", "#3b2f27", "#221f1b"], "tempo": ["#fff6f4", "#d8ddcb", "#b1c6a6", "#87b08d", "#5d9b7f", "#348378", "#1c6b6f", "#185263", "#183b52", "#162540", "#151d44"], "viridis": ["#440154", "#482878", "#3e4989", "#31688e", "#26828e", "#1f9e89", "#35b779", "#6ece58", "#b5de2b", "#fde725", "#fde725"], "rainbow": ["#00007f", "#0000ff", "#0063ff", "#00d4ff", "#4effa9", "#a9ff4e", "#ffe600", "#ff7a00", "#ff1400", "#b20000", "#7f0000"]};
   const f32 = b64 => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Float32Array(u.buffer); };
   const NP = D.nProf, ND = D.nDepth, X = f32(D.x), Y = f32(D.y);
   D.vars.forEach(v => { v.arr = f32(v.data); delete v.data; v.cmin = null; v.cmax = null; });
+  // Real-time deployments carry their individual samples (as transmitted): the points style plots those.
+  const S = D.samples ? { n: D.samples.n, t0: D.samples.t0, t: f32(D.samples.t), d: f32(D.samples.depth),
+                          x: f32(D.samples.x), y: f32(D.samples.y), p: f32(D.samples.prof),
+                          v: D.samples.vars.map(b => b ? f32(b) : null) } : null;
+  const sTime = q => S.t0 + S.t[q];
   const fmtT = s => new Date(s * 1000).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   const fmtD = s => new Date(s * 1000).toISOString().slice(0, 10);
   const timesISO = D.time.map(s => new Date(s * 1000).toISOString());
@@ -149,9 +157,22 @@
     }
     return out;
   };
+  // A "gap" is a pause between profiles longer than max(3 h, 4 x the median spacing); overlay
+  // lines are broken there instead of being drawn straight across missing data.
+  const GAP = (() => { const d = []; for (let i = 1; i < NP; i++) d.push(D.time[i] - D.time[i - 1]); d.sort((a, b) => a - b);
+                       return Math.max(3 * 3600, 4 * (d.length ? d[d.length >> 1] : 0)); })();
+  const breakGaps = (ts, ...series) => {      // insert nulls where consecutive times are > GAP apart
+    const out = series.map(() => []), tt = [];
+    for (let j = 0; j < ts.length; j++) {
+      if (j && ts[j] != null && ts[j - 1] != null && ts[j] - ts[j - 1] > GAP) { tt.push(null); out.forEach(o => o.push(null)); }
+      tt.push(ts[j]); series.forEach((s, q) => out[q].push(s[j]));
+    }
+    return [tt, ...out];
+  };
   const sunClass = e => e > -0.833 ? 3 : e > -6 ? 2 : e > -12 ? 1 : 0;
   const sunName = ['night', 'nautical twilight', 'civil twilight', 'day'];
   const cur = () => D.vars[st.v];
+  window.__curVar = () => cur().name;     // the picker keeps the selected variable when switching deployment
   const scaleName = v => v.log ? `log₁₀ ${v.label}` : v.label;
   const tr = (v, x) => v.log ? (x > 0 ? Math.log10(x) : NaN) : x;
   const crange = v => {
@@ -163,12 +184,18 @@
 
   // ----- controls
   const varsEl = document.getElementById('vars');
+  // Only variables this deployment has data for get a button; sensors it did not carry are listed
+  // underneath. A variable recorded for under 90% of the profiles shows its share.
   D.vars.forEach((v, i) => {
     const b = document.createElement('button');
-    b.innerHTML = `${v.label} <span class="u">${v.units}</span>`;
+    const part = v.coverage != null && v.coverage < 0.9 ? ` <span class="u">· ${Math.max(1, Math.round(v.coverage * 100))}% of profiles</span>` : '';
+    b.innerHTML = `${v.label} <span class="u">${v.units}</span>${part}`;
     b.onclick = () => { st.v = i; syncControls(); draw(); };
     varsEl.appendChild(b);
   });
+  if (D.absent && D.absent.length)
+    document.getElementById('absent').textContent = `Not measured on this deployment: ${D.absent.map(a => a.label).join(', ')}.`;
+  { const want = new URLSearchParams(location.search).get('v'), j = D.vars.findIndex(v => v.name === want); if (j >= 0) st.v = j; }
   const cmapEl = document.getElementById('cmap');
   Object.keys(CMAPS).forEach(k => cmapEl.add(new Option(k, k)));
   cmapEl.onchange = () => { cur().cmap = cmapEl.value; draw(); };
@@ -196,6 +223,19 @@
   exEl.oninput = () => { document.getElementById('exLabel').textContent = `(${exVal()}×)`; };
   exEl.onchange = () => { exEl.oninput(); relayoutAspect(); };
   document.getElementById('track').onchange = e => { st.track = e.target.checked; draw(true); };
+  // Curtain style: points show only bins that hold data, so gaps in real-time data stay visible
+  // (a surface joins neighbouring profiles across a gap and drops cells next to an empty bin).
+  // Default: points for real-time data, surface otherwise; ?style=points|surface overrides.
+  const styleEl = document.getElementById('style');
+  const askedStyle = new URLSearchParams(location.search).get('style');
+  st.style = ['points', 'surface'].includes(askedStyle) ? askedStyle : (D.meta && D.meta.data_mode === 'realtime' ? 'points' : 'surface');
+  styleEl.value = st.style;
+  if (S) styleEl.options[1].text = 'points (samples as sent)';
+  const styleNote = () => document.getElementById('styleNote').textContent =
+    st.style !== 'points' ? '' : S ? `Each point is one sample as transmitted (${S.n.toLocaleString()} samples; real-time data are thinned). Pauses are left blank.`
+                                   : 'Each point is a 5 m bin mean; empty bins and time gaps are left blank.';
+  styleNote();
+  styleEl.onchange = () => { st.style = styleEl.value; styleNote(); draw(true); };
   if (B) {
     document.getElementById('bathy').onchange = e => { st.bathy = e.target.checked; draw(true); };
     document.getElementById('clip').onchange = e => { st.clip = e.target.checked; draw(true); };
@@ -223,7 +263,7 @@
   function windowGrid() {
     const i0 = st.i0, i1 = st.i1, n = i1 - i0 + 1;
     // Downsample columns if very large, to keep WebGL responsive.
-    const step = Math.max(1, Math.ceil(n * ND / 600000));
+    const step = Math.max(1, Math.ceil(n * ND / (st.style === 'points' ? 200000 : 600000)));
     const cols = []; for (let i = i0; i <= i1; i += step) cols.push(i);
     return cols;
   }
@@ -248,7 +288,7 @@
     Plotly.relayout('c3d', { 'scene.aspectratio': aspect() });
   }
 
-  let lastCols = null;
+  let lastCols = null, pts3 = null, pts2 = null;
   function draw(keepCamera) {
     const v = cur(), cols = windowGrid(); lastCols = cols;
     const [cmin, cmax] = crange(v);
@@ -271,7 +311,29 @@
       hoverinfo: 'none', lighting: { ambient: 1, diffuse: 0, specular: 0, roughness: 1, fresnel: 0 },
       contours: { x: { highlight: false }, y: { highlight: false }, z: { highlight: false } },
     };
-    const traces = [surf];
+    let main3d = surf; pts3 = null;
+    if (st.style === 'points' && S && S.v[st.v]) {   // one marker per transmitted sample
+      const px = [], py = [], pz = [], pc = [], vals = S.v[st.v];
+      pts3 = [];
+      for (let q = 0; q < S.n; q++) {
+        const i = S.p[q]; if (i < st.i0 || i > st.i1) continue;
+        const c = tr(v, vals[q]); if (!Number.isFinite(c)) continue;
+        px.push(S.x[q]); py.push(S.y[q]); pz.push(-S.d[q]); pc.push(c); pts3.push(q);
+      }
+      main3d = { type: 'scatter3d', mode: 'markers', x: px, y: py, z: pz, hoverinfo: 'none',
+        marker: { size: 2.2, color: pc, colorscale: colorscale(v), cmin, cmax, opacity: 1, line: { width: 0 },
+                  colorbar: surf.colorbar, showscale: true } };
+    } else if (st.style === 'points') {     // one marker per bin that holds data
+      const px = [], py = [], pz = [], pc = [];
+      for (let k = 0; k < ND; k++) for (let j = 0; j < nc; j++) {
+        const c = cs[k][j]; if (!Number.isFinite(c)) continue;
+        px.push(xs[k][j]); py.push(ys[k][j]); pz.push(-D.depth[k]); pc.push(c);
+      }
+      main3d = { type: 'scatter3d', mode: 'markers', x: px, y: py, z: pz, hoverinfo: 'none',
+        marker: { size: 2.2, color: pc, colorscale: colorscale(v), cmin, cmax, opacity: 1, line: { width: 0 },
+                  colorbar: surf.colorbar, showscale: true } };
+    }
+    const traces = [main3d];
     if (st.track) {
       const all = []; for (let i = 0; i < NP; i += Math.max(1, Math.floor(NP / 4000))) all.push(i);
       traces.push({ type: 'scatter3d', mode: 'lines', x: all.map(i => X[i]), y: all.map(i => Y[i]), z: all.map(() => 0),
@@ -285,7 +347,8 @@
       const xs3 = [], ys3 = [], zs3 = [];
       const sm = runMedian(cols.map(i => arr[i]), 7);
       cols.forEach((i, j) => { xs3.push(X[i]); ys3.push(Y[i]); zs3.push(sm[j] == null ? null : -sm[j]); });
-      traces.push({ type: 'scatter3d', mode: 'lines', x: xs3, y: ys3, z: zs3, connectgaps: false,
+      const [, bx, by, bz] = breakGaps(cols.map(i => D.time[i]), xs3, ys3, zs3);
+      traces.push({ type: 'scatter3d', mode: 'lines', x: bx, y: by, z: bz, connectgaps: false,
                     line: { color, width }, hoverinfo: 'skip', showlegend: false, name });
     };
     if (st.mld && MLD) line3d(MLD, '#ffffff', 5, 'MLD');
@@ -336,8 +399,26 @@
     const z = [];
     for (let k = 0; k < ND; k++) { const r = new Array(cols.length); for (let j = 0; j < cols.length; j++) { const c = tr(v, v.arr[k * NP + cols[j]]); r[j] = Number.isFinite(c) ? c : null; } z.push(r); }
     const t = cols.map(i => timesISO[i]);
-    const trace = { type: 'heatmap', x: t, y: D.depth, z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
+    let trace = { type: 'heatmap', x: t, y: D.depth, z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
                     showscale: false, hoverinfo: 'none', connectgaps: false };
+    pts2 = null;
+    if (st.style === 'points' && S && S.v[st.v]) {   // transmitted samples
+      const px = [], py = [], pc = [], vals = S.v[st.v];
+      pts2 = [];
+      for (let q = 0; q < S.n; q++) {
+        const c = tr(v, vals[q]); if (!Number.isFinite(c)) continue;
+        px.push(new Date(sTime(q) * 1000).toISOString()); py.push(S.d[q]); pc.push(c); pts2.push(q);
+      }
+      trace = { type: 'scattergl', mode: 'markers', x: px, y: py, hoverinfo: 'none', showlegend: false,
+        marker: { size: 3, color: pc, colorscale: colorscale(v), cmin, cmax, line: { width: 0 } } };
+    } else if (st.style === 'points') {     // same bins as markers: gaps stay blank
+      const px = [], py = [], pc = [];
+      for (let k = 0; k < ND; k++) for (let j = 0; j < cols.length; j++) {
+        if (z[k][j] == null) continue; px.push(t[j]); py.push(D.depth[k]); pc.push(z[k][j]);
+      }
+      trace = { type: 'scattergl', mode: 'markers', x: px, y: py, hoverinfo: 'none', showlegend: false,
+        marker: { size: 3, color: pc, colorscale: colorscale(v), cmin, cmax, line: { width: 0 } } };
+    }
     const shapes = (st.i0 > 0 || st.i1 < NP - 1) ? [
       { type: 'rect', xref: 'x', yref: 'paper', x0: timesISO[0], x1: timesISO[st.i0], y0: 0, y1: 1, fillcolor: '#fcfcfb', opacity: 0.5, line: { width: 0 } },
       { type: 'rect', xref: 'x', yref: 'paper', x0: timesISO[st.i1], x1: timesISO[NP - 1], y0: 0, y1: 1, fillcolor: '#fcfcfb', opacity: 0.5, line: { width: 0 } },
@@ -351,7 +432,8 @@
     }
     if (st.sig && A.sigLines) {
       const L = A.sigLines;
-      traces2.push({ type: 'scattergl', mode: 'lines', x: L.t.map(v => v == null ? null : new Date(v * 1000).toISOString()), y: L.d,
+      const [lt, ld] = breakGaps(L.t, L.d);
+      traces2.push({ type: 'scattergl', mode: 'lines', x: lt.map(v => v == null ? null : new Date(v * 1000).toISOString()), y: ld,
         line: { color: 'rgba(11,11,11,0.5)', width: 0.8 }, connectgaps: false, hoverinfo: 'skip', name: 'σθ contours', showlegend: true });
       traces2.push({ type: 'scatter', mode: 'text', x: L.labels.map(l => new Date(l.t * 1000).toISOString()), y: L.labels.map(l => l.d),
         text: L.labels.map(l => l.txt), textfont: { size: 9, color: '#0b0b0b' }, hoverinfo: 'skip', showlegend: false, cliponaxis: true });
@@ -372,15 +454,17 @@
         line: { color: 'rgba(11,11,11,0.55)', width: 0.7, smoothing: 0.8 }, colorscale: [[0, '#0b0b0b'], [1, '#0b0b0b']], name: 'σθ' });
     }
     if (st.mld && MLD) {
-      const y = runMedian(cols.map(i => MLD[i]), 7);
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#ffffff', width: 1.4 }, connectgaps: false, hoverinfo: 'skip',
+      const [tg, y] = breakGaps(cols.map(i => D.time[i]), runMedian(cols.map(i => MLD[i]), 7));
+      const tx = tg.map(v => v == null ? null : new Date(v * 1000).toISOString());
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#ffffff', width: 1.4 }, connectgaps: false, hoverinfo: 'skip',
                      name: 'Mixed-layer depth (Δσθ = 0.03)', showlegend: true });
     }
     if (st.chl && CHLMAX) {
-      const y = runMedian(cols.map(i => CHLMAX[i]), 7);
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#eb6834', width: 1.6 }, connectgaps: false, hoverinfo: 'skip',
+      const [tg, y] = breakGaps(cols.map(i => D.time[i]), runMedian(cols.map(i => CHLMAX[i]), 7));
+      const tx = tg.map(v => v == null ? null : new Date(v * 1000).toISOString());
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#eb6834', width: 1.6 }, connectgaps: false, hoverinfo: 'skip',
                      name: 'Chlorophyll-max depth', showlegend: true });
     }
     if (SUN) {
@@ -464,11 +548,27 @@
     });
     ro.classList.remove('muted'); ro.innerHTML = `<table>${rows}</table>`;
   }
+  function readoutSample(q) {               // one transmitted sample, plus its profile's derived values
+    const i = S.p[q], la = D.lat[i], lo = D.lon[i];
+    let rows = `<tr><td>Time</td><td>${fmtT(sTime(q))}</td></tr>
+      <tr><td>Profile pos.</td><td>${la.toFixed(4)}, ${lo.toFixed(4)}</td></tr>
+      <tr><td>Depth</td><td>${S.d[q].toFixed(1)} m (sample)</td></tr>` +
+      (B ? `<tr><td>Seafloor</td><td>${Number.isFinite(BOTTOM[i]) ? (BOTTOM[i] > 0 ? Math.round(BOTTOM[i]) + ' m' : 'land') : '—'}</td></tr>` : '');
+    if (MLD) rows += `<tr><td>Mixed layer</td><td>${MLD[i] != null ? MLD[i] + ' m' : '—'}</td></tr>`;
+    if (CHLMAX) rows += `<tr><td>Chl max</td><td>${CHLMAX[i] != null ? CHLMAX[i] + ' m (' + A.chlmaxVal[i] + ')' : '—'}</td></tr>`;
+    if (SUN) rows += `<tr><td>Sun</td><td>${SUN[i].toFixed(1)}° · ${sunName[sunClass(SUN[i])]}</td></tr>`;
+    D.vars.forEach((v, j) => {
+      const val = S.v[j] ? S.v[j][q] : NaN;
+      rows += `<tr><td${j === st.v ? ' style="color:var(--ink);font-weight:600"' : ''}>${v.label}</td><td>${Number.isFinite(val) ? val.toPrecision(4) + ' ' + v.units : '—'}</td></tr>`;
+    });
+    ro.classList.remove('muted'); ro.innerHTML = `<table>${rows}</table>`;
+  }
   const g3 = document.getElementById('c3d'), g2 = document.getElementById('c2d');
   const depthIdx = d => { let b = 0, bd = Infinity; D.depth.forEach((x, k) => { const q = Math.abs(x - d); if (q < bd) { bd = q; b = k; } }); return b; };
   function bind() {
     g3.on('plotly_hover', e => {
       const p = e.points && e.points[0]; if (!p || p.curveNumber !== 0) return;
+      if (pts3 && p.pointNumber != null) return readoutSample(pts3[p.pointNumber]);
       // Locate the cell from the hovered coordinates (robust to plotly's index ordering).
       const k = depthIdx(-p.z);
       let i = lastCols[0], bd = Infinity;
@@ -480,6 +580,7 @@
     });
     g2.on('plotly_hover', e => {
       const p = e.points && e.points.find(pt => pt.curveNumber === 0); if (!p) return;
+      if (pts2 && p.pointNumber != null) return readoutSample(pts2[p.pointNumber]);
       const t = new Date(p.x).getTime() / 1000;
       let lo = 0, hi = NP - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (D.time[m] < t) lo = m + 1; else hi = m; }
       readout(lo, depthIdx(p.y));

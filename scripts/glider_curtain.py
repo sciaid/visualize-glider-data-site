@@ -57,8 +57,13 @@ VAR_DEFAULTS = {
     "oxygen_saturation": ("Oxygen saturation", "deep", False),
     "density": ("Density", "dense", False),
     "potential_density": ("Potential density", "dense", False),
-    "backscatter_700": ("Backscatter 700 nm", "tempo", True),
+    "backscatter_700": ("Backscatter 700 nm", "turbid", True),
+    "cdom": ("CDOM", "matter", False),
 }
+# Variables shown by default. A deployment shows whichever of these its file has data for; the rest
+# are listed as "not measured" (gliders carry different sensor packages).
+DEFAULT_VARS = "temperature,salinity,chlorophyll,oxygen_concentration,cdom,backscatter_700"
+UNIT_TEXT = {"m-1 sr-1": "m⁻¹ sr⁻¹"}
 
 # cmocean colour maps sampled at 11 stops (Thyng et al. 2016, doi:10.5670/oceanog.2016.66)
 CMAPS = {
@@ -68,6 +73,8 @@ CMAPS = {
     "oxy": ["#400505", "#6f0c0b", "#930d0d", "#606060", "#7c7c7b", "#999998", "#b8b7b6", "#d8d7d5", "#ebe952", "#dbbf23", "#dcaf00"],
     "deep": ["#fdfecc", "#c3eaa9", "#8cd5a1", "#62bba2", "#4ea0a0", "#43859d", "#3e6a98", "#424f8d", "#3e3b6a", "#2f2a47", "#281a2c"],
     "dense": ["#e6f1f1", "#bbd8e0", "#93bfd8", "#749fd5", "#6f7dcf", "#7059b8", "#6c3a96", "#5f2171", "#4a1550", "#300e31", "#360e24"],
+    "matter": ["#feedb0", "#faca90", "#f5a773", "#ee855e", "#e26253", "#ce4356", "#b32e5f", "#932063", "#721a60", "#4f1652", "#2f0f3e"],
+    "turbid": ["#e9f6ab", "#dbd987", "#cfbc66", "#c4a14d", "#b58740", "#a1703b", "#8a5e3a", "#704d37", "#563e30", "#3b2f27", "#221f1b"],
     "tempo": ["#fff6f4", "#d8ddcb", "#b1c6a6", "#87b08d", "#5d9b7f", "#348378", "#1c6b6f", "#185263", "#183b52", "#162540", "#151d44"],
     "viridis": ["#440154", "#482878", "#3e4989", "#31688e", "#26828e", "#1f9e89", "#35b779", "#6ece58", "#b5de2b", "#fde725", "#fde725"],
     # jet-style rainbow, offered because many glider portals default to it; not perceptually uniform
@@ -99,11 +106,12 @@ def load(path, var_names, profile_step, bathy=None):
     idx = np.where(good)[0][::max(1, profile_step)]
     idx = idx[np.argsort(t[idx], kind="stable")]
 
-    variables = []
+    variables, absent = [], []
     deepest = 0
     for name in var_names:
         if name not in ds.variables:
             print(f"  note: {name} not in file, skipped")
+            absent.append({"name": name, "label": VAR_DEFAULTS.get(name, (name,))[0]})
             continue
         v = ds[name]
         a = _f(v)
@@ -117,10 +125,12 @@ def load(path, var_names, profile_step, bathy=None):
         rows = np.where(np.isfinite(a).any(axis=1))[0]
         if rows.size == 0:
             print(f"  note: {name} is all missing, skipped")
+            absent.append({"name": name, "label": VAR_DEFAULTS.get(name, (name,))[0]})
             continue
         deepest = max(deepest, rows.max())
         label, cmap, log = VAR_DEFAULTS.get(name, (getattr(v, "long_name", name), "viridis", False))
         units = getattr(v, "units", "")
+        units = UNIT_TEXT.get(units.strip(), units)
         if name == "salinity" and units.strip() in ("1e-3", "0.001", "1", "PSU", "psu", "PSS-78"):
             units = "PSU"
         variables.append({"name": name, "label": label, "units": units,
@@ -145,7 +155,7 @@ def load(path, var_names, profile_step, bathy=None):
         "lat": [round(float(s), 5) for s in lat[idx]],
         "lon": [round(float(s), 5) for s in lon[idx]],
         "x": _b64(x), "y": _b64(y),
-        "vars": [],
+        "vars": [], "absent": absent,
     }
     data["aux"] = derived_block(ds, idx, depth, nd, t[idx], lat[idx], lon[idx])
     grids = bathy if isinstance(bathy, (list, tuple)) else ([bathy] if bathy is not None else [])
@@ -160,8 +170,9 @@ def load(path, var_names, profile_step, bathy=None):
         lo, hi = np.percentile(fin, [1, 99])
         pos = fin[fin > 0]
         llo, lhi = (np.percentile(pos, [1, 99]) if pos.size else (lo, hi))
+        cover = float(np.isfinite(arr).any(axis=0).mean())          # share of profiles with data
         data["vars"].append({
-            "name": v["name"], "label": v["label"], "units": v["units"],
+            "name": v["name"], "label": v["label"], "units": v["units"], "coverage": round(cover, 3),
             "cmap": v["cmap"], "log": v["log"],
             "range": [float(f"{lo:.4g}"), float(f"{hi:.4g}")],
             "logRange": [float(f"{llo:.4g}"), float(f"{lhi:.4g}")],
@@ -530,6 +541,8 @@ def build_site(a, files, bathy):
         end = dt.datetime.fromtimestamp(d["time"][-1], dt.timezone.utc)
         entry = {"name": d["name"], "file": Path(f).name, "start": start.strftime("%Y-%m-%d"), "end": end.strftime("%Y-%m-%d"),
                  "profiles": d["nProf"], "maxDepth": d["depth"][-1], "vars": [v["name"] for v in d["vars"]],
+                 "varLabels": [v["label"] for v in d["vars"]], "coverage": [v["coverage"] for v in d["vars"]],
+                 "absent": [x["label"] for x in d.get("absent", [])],
                  "glider": d["meta"].get("glider_name", ""),
                  "latRange": [min(d["lat"]), max(d["lat"])], "lonRange": [min(d["lon"]), max(d["lon"])],
                  "bathy": bool(d.get("bathy")),
@@ -546,7 +559,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="3D curtain viewer for gridded glider NetCDF files")
     ap.add_argument("files", nargs="+")
     ap.add_argument("-o", "--out-dir", default="glider_output")
-    ap.add_argument("--vars", default="temperature,salinity,chlorophyll,oxygen_concentration",
+    ap.add_argument("--vars", default=DEFAULT_VARS,
                     help="comma-separated variable names (default: %(default)s)")
     ap.add_argument("--profile-step", type=int, default=1,
                     help="keep every Nth profile (default 1 = all)")
@@ -631,6 +644,7 @@ __PLOTLY__
 
   <h2>Variable</h2>
   <div class="seg" id="vars"></div>
+  <div class="muted" id="absent" style="margin-top:4px"></div>
 
   <h2>Colour</h2>
   <label class="line">Map <select id="cmap"></select></label>
@@ -696,7 +710,7 @@ __PLOTLY__
     // Hidden on deployment pages, where the page fixes the deployment.
     const params = new URLSearchParams(location.search);
     const topLevel = window.self === window.top;
-    sel.onchange = () => { params.set('d', sel.value); location.search = '?' + params.toString(); };
+    sel.onchange = () => { params.set('d', sel.value); if (window.__curVar) params.set('v', window.__curVar()); location.search = '?' + params.toString(); };
     if (topLevel || params.get('picker') === '1') document.getElementById('depRow').style.display = '';
     if (topLevel) document.getElementById('backLink').style.display = '';   // full-screen: way back to the site
     D = await fetch(`data/${encodeURIComponent(name)}.json`).then(r => r.json());
@@ -762,6 +776,7 @@ __PLOTLY__
   const sunClass = e => e > -0.833 ? 3 : e > -6 ? 2 : e > -12 ? 1 : 0;
   const sunName = ['night', 'nautical twilight', 'civil twilight', 'day'];
   const cur = () => D.vars[st.v];
+  window.__curVar = () => cur().name;     // the picker keeps the selected variable when switching deployment
   const scaleName = v => v.log ? `log₁₀ ${v.label}` : v.label;
   const tr = (v, x) => v.log ? (x > 0 ? Math.log10(x) : NaN) : x;
   const crange = v => {
@@ -773,12 +788,18 @@ __PLOTLY__
 
   // ----- controls
   const varsEl = document.getElementById('vars');
+  // Only variables this deployment has data for get a button; sensors it did not carry are listed
+  // underneath. A variable recorded for under 90% of the profiles shows its share.
   D.vars.forEach((v, i) => {
     const b = document.createElement('button');
-    b.innerHTML = `${v.label} <span class="u">${v.units}</span>`;
+    const part = v.coverage != null && v.coverage < 0.9 ? ` <span class="u">· ${Math.max(1, Math.round(v.coverage * 100))}% of profiles</span>` : '';
+    b.innerHTML = `${v.label} <span class="u">${v.units}</span>${part}`;
     b.onclick = () => { st.v = i; syncControls(); draw(); };
     varsEl.appendChild(b);
   });
+  if (D.absent && D.absent.length)
+    document.getElementById('absent').textContent = `Not measured on this deployment: ${D.absent.map(a => a.label).join(', ')}.`;
+  { const want = new URLSearchParams(location.search).get('v'), j = D.vars.findIndex(v => v.name === want); if (j >= 0) st.v = j; }
   const cmapEl = document.getElementById('cmap');
   Object.keys(CMAPS).forEach(k => cmapEl.add(new Option(k, k)));
   cmapEl.onchange = () => { cur().cmap = cmapEl.value; draw(); };
