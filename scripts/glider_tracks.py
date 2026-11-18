@@ -301,6 +301,7 @@ def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_t
                 "lon": [round(float(x), 5) for x in lo[idx]],
                 "region": assign_region(la, lo, regions or []) if regions else "",
                 "project": ((extra or {}).get(name) or {}).get("project", ""),
+                "mode": ((extra or {}).get(name) or {}).get("mode", ""),
             })
 
     sum_path = out_dir / "deployments_summary.csv"
@@ -494,6 +495,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       `<div class="pop"><b>${esc(d.name)}</b><table>
        ${d.region ? `<tr><td>Region</td><td>${esc(d.region)}</td></tr>` : ''}
        ${d.project ? `<tr><td>Project</td><td>${esc(d.project)}</td></tr>` : ''}
+       ${d.mode === 'realtime' ? `<tr><td>Data</td><td><b>Real-time (provisional)</b></td></tr>` : ''}
        <tr><td>Start</td><td>${fmtTime(d.start)}</td></tr>
        <tr><td>End</td><td>${fmtTime(d.end)}</td></tr>
        <tr><td>Duration</td><td>${days} days</td></tr>

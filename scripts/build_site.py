@@ -55,7 +55,9 @@ toc: false
 |---|---|---|---|---|---|---|---|---|
 | {region} | {project} | {glider} | {start} | {end} | {profiles:,} | {maxDepth:.0f} m | {distance} | {per_day} |
 
-**Area:** {area}{project_note}
+{realtime_note}**Area:** {area}{project_note}
+
+**Data:** {source}
 
 <iframe src="../viewer/index.html?d={name}" title="3D curtain viewer: {name}"
         style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
@@ -89,7 +91,40 @@ def file_meta(path):
     with netCDF4.Dataset(path) as ds:
         name = str(getattr(ds, "deployment_name", "") or Path(path).stem).strip()
         full = str(getattr(ds, "project", "") or "").strip()
-    return {"name": name, "project": full.split(":")[0].strip(), "projectFull": full}
+        mode = str(getattr(ds, "data_mode", "") or "").strip()
+        src_id = str(getattr(ds, "source_dataset", "") or "").strip()
+        src_url = str(getattr(ds, "source_url", "") or "").strip()
+    return {"name": name, "project": full.split(":")[0].strip(), "projectFull": full,
+            "mode": mode, "sourceDataset": src_id, "sourceUrl": src_url}
+
+
+def is_gridded(path):
+    """True for depth x profile grids (local L3 or fetch_erddap output); False for anything else,
+    e.g. a raw per-sample ERDDAP download left in the folder."""
+    import netCDF4
+    try:
+        with netCDF4.Dataset(path) as ds:
+            return ("depth" in ds.dimensions and "time" in ds.dimensions
+                    and any(v.dimensions == ("depth", "time") for v in ds.variables.values()))
+    except OSError:
+        return False
+
+
+REALTIME_NOTE = """::: {{.callout-warning}}
+## Real-time data (provisional)
+Data through {end}. Real-time data are sent while the glider is deployed: they are thinned,
+not quality-controlled and may have gaps. This page is replaced by the delayed-mode data once
+it is published.
+:::
+
+"""
+
+
+def fmt_source(e):
+    if e.get("sourceUrl"):
+        return f"[{e['sourceDataset']}]({e['sourceUrl']}) on the IOOS Glider DAC ERDDAP" + \
+               (" (real-time)" if e.get("mode") == "realtime" else "")
+    return "SWFSC ESD processed (L3) file"
 
 
 def fmt_area(e):
@@ -113,13 +148,24 @@ def write_summary(index):
         yr = f"{years[0]}–{years[-1]}" if len(years) > 1 else f"{years[0]}"
         projects = ", ".join(sorted({e.get("project") for e in es if e.get("project")})) or "—"
         km = sum(e.get("distanceKm") or 0 for e in es)
-        rows.append(f"| {region} | {len(es)} | {yr} | {projects} | ≈ {round(km, -2):,.0f} km |")
+        nrt = sum(e.get("mode") == "realtime" for e in es)
+        count = f"{len(es)}" + (f" ({nrt} real-time)" if nrt else "")
+        rows.append(f"| {region} | {count} | {yr} | {projects} | ≈ {round(km, -2):,.0f} km |")
     total = sum(e.get("distanceKm") or 0 for e in index)
     if len(groups) > 1:
         rows.append(f"| **All** | **{len(index)}** | | | **≈ {round(total, -2):,.0f} km** |")
     (ROOT / "_summary.md").write_text(
         "| Region | Deployments | Years (start) | Projects | Distance (approx.) |\n"
         "|---|---|---|---|---|\n" + "\n".join(rows) + "\n", encoding="utf-8")
+
+
+def walk_nc(folder):
+    """Every *.nc under folder, following linked folders too (sorted)."""
+    import os
+    out = []
+    for dirpath, _, names in os.walk(folder, followlinks=True):
+        out += [Path(dirpath) / n for n in names if n.lower().endswith(".nc")]
+    return sorted(out)
 
 
 def fingerprint(path, chunk=1 << 20):
@@ -143,10 +189,26 @@ def main():
                     help="drop deployments whose NetCDF file is not in the given folders")
     a = ap.parse_args()
 
-    files = []
+    files, skipped = [], []
     for d in a.nc_dirs:
-        files += [str(p) for p in sorted(Path(d).rglob("*.nc"))
-                  if not any(k in p.name.lower() for k in BATHY_KEYS)]
+        for p in walk_nc(d):
+            if any(k in p.name.lower() for k in BATHY_KEYS):
+                continue
+            (files if is_gridded(p) else skipped).append(str(p))
+    for p in skipped:
+        print(f"  skipping {Path(p).name}: not a gridded depth x profile file")
+    # One file per deployment: a local L3 file wins over an ERDDAP grid of the same deployment.
+    by_name = {}
+    for f in files:
+        m = file_meta(f)
+        if m["name"] in by_name and not m["sourceDataset"]:
+            print(f"  {m['name']}: using local file, ignoring {Path(by_name[m['name']]).name}")
+            by_name[m["name"]] = f
+        elif m["name"] in by_name:
+            print(f"  {m['name']}: using {Path(by_name[m['name']]).name}, ignoring {Path(f).name}")
+        else:
+            by_name[m["name"]] = f
+    files = sorted(by_name.values())
     if not files:
         sys.exit(f"No glider NetCDF files found in {a.nc_dirs}")
     regions = glider_tracks.load_regions(ROOT / "regions.json")
@@ -176,7 +238,9 @@ def main():
 
     # 3. Curtain data for new/changed deployments (bathymetry grids found next to all files)
     print("\n== Curtain viewer data ==")
-    bathy_arg = ",".join(str(p) for p in glider_curtain.find_bathy(files)) or "none"
+    grids = sorted({str(p) for d in a.nc_dirs for p in walk_nc(d)
+                    if any(k in p.name.lower() for k in BATHY_KEYS)})
+    bathy_arg = ",".join(grids) or "none"
     glider_curtain.main(todo + ["--site", str(ROOT / "viewer"), "--bathy", bathy_arg] if todo else
                         [files[0], "--site", str(ROOT / "viewer"), "--bathy", "none", "--viewer-only"])
 
@@ -187,7 +251,8 @@ def main():
         if e.get("file") in by_file:
             f = by_file[e["file"]]
             e["fingerprint"] = fps[f]
-            e["project"], e["projectFull"] = meta[f]["project"], meta[f]["projectFull"]
+            for k in ("project", "projectFull", "mode", "sourceDataset", "sourceUrl"):
+                e[k] = meta[f][k]
         la = (e["latRange"][0] + e["latRange"][1]) / 2
         lo = (e["lonRange"][0] + e["lonRange"][1]) / 2
         e["region"] = glider_tracks.assign_region([la], [lo], regions) if regions else ""
@@ -208,7 +273,8 @@ def main():
         page = DEPLOYMENT_PAGE.format(
             name=e["name"], region=e.get("region") or "", project=e.get("project") or "", distance=fmt_distance(e), per_day=fmt_per_day(e), glider=e.get("glider") or "",
             start=e["start"], end=e["end"], profiles=e["profiles"], maxDepth=e["maxDepth"],
-            area=fmt_area(e),
+            area=fmt_area(e), source=fmt_source(e),
+            realtime_note=REALTIME_NOTE.format(end=e["end"]) if e.get("mode") == "realtime" else "",
             project_note=(f" · **Project:** {e['projectFull']}"
                           if e.get("projectFull") and e["projectFull"] != e.get("project") else ""))
         (ROOT / "deployments" / f"{e['name']}.qmd").write_text(page, encoding="utf-8")
@@ -218,7 +284,7 @@ def main():
     parts = []
     for region, es in groups.items():
         rows = "\n".join(
-            f"| [{e['name']}](deployments/{e['name']}.qmd) | {e.get('project', '')} | {e.get('glider', '')} | {e['start']} | {e['end']} "
+            f"| [{e['name']}](deployments/{e['name']}.qmd){' · *real-time*' if e.get('mode') == 'realtime' else ''} | {e.get('project', '')} | {e.get('glider', '')} | {e['start']} | {e['end']} "
             f"| {e['profiles']:,} | {e['maxDepth']:.0f} m | {fmt_distance(e)} | {fmt_per_day(e)} |" for e in es)
         heading = f"## {region} ({len(es)})\n\n" if len(groups) > 1 else ""
         parts.append(f"{heading}| Deployment | Project | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |\n"

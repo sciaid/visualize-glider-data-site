@@ -53,6 +53,31 @@ Then commit and push (or open a pull request). The site rebuilds itself.
   built from all files found, so keep every deployment's file available when rebuilding.
   `--prune` removes deployments whose file is no longer in the folders.
 
+### Deployments from ERDDAP
+
+`scripts/fetch_erddap.py` downloads deployments from the
+[IOOS Glider DAC ERDDAP](https://gliders.ioos.us/erddap/) and grids them into the same 5 m
+layout as the local L3 files, into `<folder>\ERDDAP\`:
+
+```
+python scripts/fetch_erddap.py "C:\Claude_work\PROJECTS\Glider L-3 ncfiles" --dry-run   # see the plan
+python scripts/fetch_erddap.py "C:\Claude_work\PROJECTS\Glider L-3 ncfiles"
+python scripts/build_site.py  "C:\Claude_work\PROJECTS\Glider L-3 ncfiles"
+```
+
+- Only datasets from *NOAA National Marine Fisheries Service Southwest Fisheries Science Center*
+  (the older *Antarctic Ecosystem Research Division* datasets are skipped).
+- Delayed-mode data are used when published; otherwise real-time data, labelled **real-time
+  (provisional)** on the site. When the delayed dataset appears, the real-time one is removed.
+- A deployment with a local L3 file is not downloaded: local files win.
+- Only new or changed datasets are downloaded (`ERDDAP\manifest.json`); raw downloads are
+  deleted after gridding (~1–2 MB per gridded deployment).
+- Checked against calanus-20260824: the gridded ERDDAP data matched the local L3 file in
+  73,826 of 73,828 cells; the other 2 differ by one sample on a bin edge (< 0.001 °C).
+
+Files under the folder that are not depth × profile grids (e.g. a raw ERDDAP download) are
+skipped by the build with a note.
+
 ### Regions
 
 `regions.json` lists named lat/lon boxes (Antarctic Peninsula, Hawaii, California). Each
