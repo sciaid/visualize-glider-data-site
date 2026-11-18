@@ -7,7 +7,7 @@ project:
     - "viewer/**"
 
 website:
-  title: "AMLR glider deployments"
+  title: "ESD glider deployments"
   navbar:
     left:
       - href: index.qmd

@@ -1,8 +1,9 @@
 # visualize-glider-data-site
 
-AMLR glider deployments – website
+ESD glider deployments – website
 
-A [Quarto](https://quarto.org) website for NOAA SWFSC AMLR Slocum glider deployments:
+A [Quarto](https://quarto.org) website for glider deployments by the NOAA SWFSC Ecosystem Science
+Division (ESD) Glider Team, including the Antarctic Marine Living Resources (AMLR) program:
 
 - **Overview** – map of all deployments, filterable by start year and name
 - **Deployments** – one page per deployment with a 3D curtain (temperature, salinity,
