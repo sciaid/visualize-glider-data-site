@@ -16,6 +16,14 @@ Values are shown as stored. The gridded QC flags are bin-averaged in these files
 are not used for masking. Potential density in the files was computed from raw,
 uncorrected salinity.
 
+Deployments without a local L3 file are downloaded from the
+[IOOS Glider DAC ERDDAP](https://gliders.ioos.us/erddap/) and gridded the same way: each
+profile's samples are averaged into 5 m depth bins. For a deployment available both ways
+(calanus-20260824) this reproduced the L3 file to within 0.001 °C in every bin. Delayed-mode
+data are used when published. Until then, real-time data are shown and labelled
+**real-time (provisional)**: they are thinned, not quality-controlled and may have gaps. Each
+deployment page links to its ERDDAP dataset.
+
 ## What the viewer shows
 
 **3D curtain.** The selected variable on a vertical surface beneath the glider track,
