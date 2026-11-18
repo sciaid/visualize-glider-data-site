@@ -167,8 +167,41 @@ def load(path, var_names, profile_step, bathy=None):
             "logRange": [float(f"{llo:.4g}"), float(f"{lhi:.4g}")],
             "data": _b64(arr),  # row-major: depth x profile
         })
+    if "sample" in ds.dimensions and "sample_time" in ds.variables:
+        smp = samples_block(ds, idx, t, lat0, lon0, kx, [v["name"] for v in data["vars"]])
+        if smp:
+            data["samples"] = smp
     ds.close()
     return data
+
+
+def samples_block(ds, idx, t, lat0, lon0, kx, var_names):
+    """Individual samples kept by fetch_erddap.py for real-time data: time (s after the first
+    profile), depth, km east/north, profile column (in the viewer's profile order) and one array per
+    displayed variable (null where the file has none)."""
+    col = np.full(t.size, -1, int)
+    col[idx] = np.arange(idx.size)                       # file profile index -> viewer column
+    sp = np.asarray(ds["sample_profile"][:], int)
+    ok = (sp >= 0) & (sp < t.size)
+    prof = np.where(ok, col[np.clip(sp, 0, t.size - 1)], -1)
+    st = _f(ds["sample_time"]); sd = _f(ds["sample_depth"])
+    sla = _f(ds["sample_latitude"]); slo = _f(ds["sample_longitude"])
+    keep = (prof >= 0) & np.isfinite(st) & np.isfinite(sd)
+    if not keep.any():
+        return None
+    prof, st, sd, sla, slo = prof[keep], st[keep], sd[keep], sla[keep], slo[keep]
+    # position: the sample's own, else its profile's
+    lat_p, lon_p = _f(ds["latitude"])[idx][prof], _f(ds["longitude"])[idx][prof]
+    sla = np.where(np.isfinite(sla), sla, lat_p); slo = np.where(np.isfinite(slo), slo, lon_p)
+    t0 = float(t[idx][0])
+    out = {"n": int(prof.size), "t0": t0,
+           "t": _b64(st - t0), "depth": _b64(sd),
+           "x": _b64((slo - lon0) * kx), "y": _b64((sla - lat0) * 110.57),
+           "prof": _b64(prof.astype("f4")), "vars": []}
+    for name in var_names:
+        key = f"sample_{name}"
+        out["vars"].append(_b64(_f(ds[key])[keep]) if key in ds.variables else None)
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -672,6 +705,11 @@ __PLOTLY__
   const f32 = b64 => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Float32Array(u.buffer); };
   const NP = D.nProf, ND = D.nDepth, X = f32(D.x), Y = f32(D.y);
   D.vars.forEach(v => { v.arr = f32(v.data); delete v.data; v.cmin = null; v.cmax = null; });
+  // Real-time deployments carry their individual samples (as transmitted): the points style plots those.
+  const S = D.samples ? { n: D.samples.n, t0: D.samples.t0, t: f32(D.samples.t), d: f32(D.samples.depth),
+                          x: f32(D.samples.x), y: f32(D.samples.y), p: f32(D.samples.prof),
+                          v: D.samples.vars.map(b => b ? f32(b) : null) } : null;
+  const sTime = q => S.t0 + S.t[q];
   const fmtT = s => new Date(s * 1000).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   const fmtD = s => new Date(s * 1000).toISOString().slice(0, 10);
   const timesISO = D.time.map(s => new Date(s * 1000).toISOString());
@@ -775,8 +813,10 @@ __PLOTLY__
   const askedStyle = new URLSearchParams(location.search).get('style');
   st.style = ['points', 'surface'].includes(askedStyle) ? askedStyle : (D.meta && D.meta.data_mode === 'realtime' ? 'points' : 'surface');
   styleEl.value = st.style;
+  if (S) styleEl.options[1].text = 'points (samples as sent)';
   const styleNote = () => document.getElementById('styleNote').textContent =
-    st.style === 'points' ? 'Each point is a 5 m bin mean; empty bins and time gaps are left blank.' : '';
+    st.style !== 'points' ? '' : S ? `Each point is one sample as transmitted (${S.n.toLocaleString()} samples; real-time data are thinned). Pauses are left blank.`
+                                   : 'Each point is a 5 m bin mean; empty bins and time gaps are left blank.';
   styleNote();
   styleEl.onchange = () => { st.style = styleEl.value; styleNote(); draw(true); };
   if (B) {
@@ -831,7 +871,7 @@ __PLOTLY__
     Plotly.relayout('c3d', { 'scene.aspectratio': aspect() });
   }
 
-  let lastCols = null;
+  let lastCols = null, pts3 = null, pts2 = null;
   function draw(keepCamera) {
     const v = cur(), cols = windowGrid(); lastCols = cols;
     const [cmin, cmax] = crange(v);
@@ -854,8 +894,19 @@ __PLOTLY__
       hoverinfo: 'none', lighting: { ambient: 1, diffuse: 0, specular: 0, roughness: 1, fresnel: 0 },
       contours: { x: { highlight: false }, y: { highlight: false }, z: { highlight: false } },
     };
-    let main3d = surf;
-    if (st.style === 'points') {            // one marker per bin that holds data
+    let main3d = surf; pts3 = null;
+    if (st.style === 'points' && S && S.v[st.v]) {   // one marker per transmitted sample
+      const px = [], py = [], pz = [], pc = [], vals = S.v[st.v];
+      pts3 = [];
+      for (let q = 0; q < S.n; q++) {
+        const i = S.p[q]; if (i < st.i0 || i > st.i1) continue;
+        const c = tr(v, vals[q]); if (!Number.isFinite(c)) continue;
+        px.push(S.x[q]); py.push(S.y[q]); pz.push(-S.d[q]); pc.push(c); pts3.push(q);
+      }
+      main3d = { type: 'scatter3d', mode: 'markers', x: px, y: py, z: pz, hoverinfo: 'none',
+        marker: { size: 2.2, color: pc, colorscale: colorscale(v), cmin, cmax, opacity: 1, line: { width: 0 },
+                  colorbar: surf.colorbar, showscale: true } };
+    } else if (st.style === 'points') {     // one marker per bin that holds data
       const px = [], py = [], pz = [], pc = [];
       for (let k = 0; k < ND; k++) for (let j = 0; j < nc; j++) {
         const c = cs[k][j]; if (!Number.isFinite(c)) continue;
@@ -933,7 +984,17 @@ __PLOTLY__
     const t = cols.map(i => timesISO[i]);
     let trace = { type: 'heatmap', x: t, y: D.depth, z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
                     showscale: false, hoverinfo: 'none', connectgaps: false };
-    if (st.style === 'points') {            // same bins as markers: gaps stay blank
+    pts2 = null;
+    if (st.style === 'points' && S && S.v[st.v]) {   // transmitted samples
+      const px = [], py = [], pc = [], vals = S.v[st.v];
+      pts2 = [];
+      for (let q = 0; q < S.n; q++) {
+        const c = tr(v, vals[q]); if (!Number.isFinite(c)) continue;
+        px.push(new Date(sTime(q) * 1000).toISOString()); py.push(S.d[q]); pc.push(c); pts2.push(q);
+      }
+      trace = { type: 'scattergl', mode: 'markers', x: px, y: py, hoverinfo: 'none', showlegend: false,
+        marker: { size: 3, color: pc, colorscale: colorscale(v), cmin, cmax, line: { width: 0 } } };
+    } else if (st.style === 'points') {     // same bins as markers: gaps stay blank
       const px = [], py = [], pc = [];
       for (let k = 0; k < ND; k++) for (let j = 0; j < cols.length; j++) {
         if (z[k][j] == null) continue; px.push(t[j]); py.push(D.depth[k]); pc.push(z[k][j]);
@@ -1070,11 +1131,27 @@ __PLOTLY__
     });
     ro.classList.remove('muted'); ro.innerHTML = `<table>${rows}</table>`;
   }
+  function readoutSample(q) {               // one transmitted sample, plus its profile's derived values
+    const i = S.p[q], la = D.lat[i], lo = D.lon[i];
+    let rows = `<tr><td>Time</td><td>${fmtT(sTime(q))}</td></tr>
+      <tr><td>Profile pos.</td><td>${la.toFixed(4)}, ${lo.toFixed(4)}</td></tr>
+      <tr><td>Depth</td><td>${S.d[q].toFixed(1)} m (sample)</td></tr>` +
+      (B ? `<tr><td>Seafloor</td><td>${Number.isFinite(BOTTOM[i]) ? (BOTTOM[i] > 0 ? Math.round(BOTTOM[i]) + ' m' : 'land') : '—'}</td></tr>` : '');
+    if (MLD) rows += `<tr><td>Mixed layer</td><td>${MLD[i] != null ? MLD[i] + ' m' : '—'}</td></tr>`;
+    if (CHLMAX) rows += `<tr><td>Chl max</td><td>${CHLMAX[i] != null ? CHLMAX[i] + ' m (' + A.chlmaxVal[i] + ')' : '—'}</td></tr>`;
+    if (SUN) rows += `<tr><td>Sun</td><td>${SUN[i].toFixed(1)}° · ${sunName[sunClass(SUN[i])]}</td></tr>`;
+    D.vars.forEach((v, j) => {
+      const val = S.v[j] ? S.v[j][q] : NaN;
+      rows += `<tr><td${j === st.v ? ' style="color:var(--ink);font-weight:600"' : ''}>${v.label}</td><td>${Number.isFinite(val) ? val.toPrecision(4) + ' ' + v.units : '—'}</td></tr>`;
+    });
+    ro.classList.remove('muted'); ro.innerHTML = `<table>${rows}</table>`;
+  }
   const g3 = document.getElementById('c3d'), g2 = document.getElementById('c2d');
   const depthIdx = d => { let b = 0, bd = Infinity; D.depth.forEach((x, k) => { const q = Math.abs(x - d); if (q < bd) { bd = q; b = k; } }); return b; };
   function bind() {
     g3.on('plotly_hover', e => {
       const p = e.points && e.points[0]; if (!p || p.curveNumber !== 0) return;
+      if (pts3 && p.pointNumber != null) return readoutSample(pts3[p.pointNumber]);
       // Locate the cell from the hovered coordinates (robust to plotly's index ordering).
       const k = depthIdx(-p.z);
       let i = lastCols[0], bd = Infinity;
@@ -1086,6 +1163,7 @@ __PLOTLY__
     });
     g2.on('plotly_hover', e => {
       const p = e.points && e.points.find(pt => pt.curveNumber === 0); if (!p) return;
+      if (pts2 && p.pointNumber != null) return readoutSample(pts2[p.pointNumber]);
       const t = new Date(p.x).getTime() / 1000;
       let lo = 0, hi = NP - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (D.time[m] < t) lo = m + 1; else hi = m; }
       readout(lo, depthIdx(p.y));

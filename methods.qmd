@@ -37,12 +37,15 @@ in km east/north of the deployment's mean position. Vertical exaggeration is adj
 land heights are scaled down so islands do not hide the curtain.
 
 **Surface or points.** The curtain and the section can be drawn as a continuous surface or as
-one point per 5 m bin that holds data (the *Curtain* control). Real-time data are thinned
-before transmission, so often only every other 5 m bin has a value, and transmissions can
-pause for hours to more than a day. A surface drops every cell next to an empty bin and is drawn
-straight across pauses, so real-time deployments open as points, where empty bins and pauses
-stay blank. Delayed-mode deployments open as a surface. Overlay lines (σθ contours,
-mixed-layer depth, chlorophyll-max depth) are broken wherever profiles are more than
+points (the *Curtain* control). Real-time data are thinned before transmission (for example,
+samples about 10 m apart in the vertical for stenella-20261103), so many 5 m bins are empty, and
+transmissions can pause for hours to more than a day. A surface drops every cell next to an empty
+bin and is drawn straight across pauses. Real-time deployments therefore open as points, one per
+sample as transmitted, at the sample's own time, depth and position; empty depths and pauses stay
+blank, and the readout shows that sample's values. The T–S diagram and the derived quantities
+(σθ, mixed-layer depth, chlorophyll maximum) still use the 5 m bins. Delayed-mode deployments
+open as a surface; for them the points option shows one point per 5 m bin. Overlay lines (σθ
+contours, mixed-layer depth, chlorophyll-max depth) are broken wherever profiles are more than
 max(3 h, 4 × the median profile spacing) apart.
 
 **Depth–time section.** The same variable against time and depth, with the seafloor
