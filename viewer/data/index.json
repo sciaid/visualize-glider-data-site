@@ -25,7 +25,9 @@
   "distanceKm": 1745.6,
   "days": 86.47,
   "fingerprint": "140366967-521fdadd1fedfd90",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr01-20181216",
@@ -53,7 +55,9 @@
   "distanceKm": 1785.8,
   "days": 81.73,
   "fingerprint": "65322325-d7da8069066c7f1c",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr02-20191206",
@@ -81,7 +85,9 @@
   "distanceKm": 2197.6,
   "days": 96.64,
   "fingerprint": "146702703-f671fa5e81389c37",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr03-20191206",
@@ -109,7 +115,9 @@
   "distanceKm": 2312.6,
   "days": 96.93,
   "fingerprint": "75656341-c4e9d058980dc24e",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr01-20191216",
@@ -137,7 +145,9 @@
   "distanceKm": 1985.8,
   "days": 86.99,
   "fingerprint": "65383837-1b7680f2026fcf5b",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr01-20211121",
@@ -165,7 +175,9 @@
   "distanceKm": 589.6,
   "days": 26.46,
   "fingerprint": "85805799-2348b5c5385a1681",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr05-20211124",
@@ -193,7 +205,9 @@
   "distanceKm": 508.4,
   "days": 20.08,
   "fingerprint": "33151527-62d9270b1c3492c0",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr07-20221204",
@@ -221,7 +235,9 @@
   "distanceKm": 448.4,
   "days": 20.58,
   "fingerprint": "16322476-593bb86e091c6652",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr04-20221205",
@@ -249,7 +265,9 @@
   "distanceKm": 1995.6,
   "days": 70.21,
   "fingerprint": "87432002-0cf12ecbf6693ff7",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr06-20221205",
@@ -277,7 +295,9 @@
   "distanceKm": 1694.5,
   "days": 61.94,
   "fingerprint": "62493805-1f18ff5813b9a761",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr03-20231128",
@@ -305,7 +325,9 @@
   "distanceKm": 1635.1,
   "days": 59.62,
   "fingerprint": "71413066-f22531f74a9b4d55",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr04-20231128",
@@ -333,7 +355,9 @@
   "distanceKm": 1398.5,
   "days": 59.66,
   "fingerprint": "64882204-f6bdcd7f01995c18",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr01-20241120",
@@ -361,7 +385,9 @@
   "distanceKm": 1127.9,
   "days": 43.03,
   "fingerprint": "48037448-6162e5677b058042",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr08-20241120",
@@ -389,7 +415,9 @@
   "distanceKm": 125.3,
   "days": 3.38,
   "fingerprint": "6059574-d78b23b07a3a9ec3",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr02-20251123",
@@ -417,7 +445,9 @@
   "distanceKm": 125.1,
   "days": 5.9,
   "fingerprint": "12856893-5d2d89767d6e2a0d",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD"
  },
  {
   "name": "amlr30-20260114",
@@ -445,6 +475,8 @@
   "distanceKm": 430.5,
   "days": 18.81,
   "fingerprint": "27185060-a5143612d606d121",
-  "region": "Antarctic Peninsula"
+  "region": "Antarctic Peninsula",
+  "project": "FREEBYRD",
+  "projectFull": "FREEBYRD: Estimate Antarctic krill biomass in support of CCAMLR"
  }
 ]

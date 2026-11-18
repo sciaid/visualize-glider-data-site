@@ -21,6 +21,7 @@ It writes (relative to the repository root):
     viewer/data/index.json         list of deployments, with region and source fingerprint
     deployments/<name>.qmd         one page per deployment
     deployments.qmd                table of all deployments, grouped by region
+    _summary.md                    per-region summary table shown on the home page
 
 Regions come from regions.json (name + lat/lon box, matched on each deployment's median
 position). Bathymetry: every GEBCO/ETOPO grid (file name containing gebco, etopo or bathy)
@@ -50,9 +51,11 @@ page-layout: full
 toc: false
 ---
 
-| Region | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day | Area |
+| Region | Project | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |
 |---|---|---|---|---|---|---|---|---|
-| {region} | {glider} | {start} | {end} | {profiles:,} | {maxDepth:.0f} m | {distance} | {per_day} | {lat0:.2f}° to {lat1:.2f}°, {lon0:.2f}° to {lon1:.2f}° |
+| {region} | {project} | {glider} | {start} | {end} | {profiles:,} | {maxDepth:.0f} m | {distance} | {per_day} |
+
+**Area:** {area}{project_note}
 
 <iframe src="../viewer/index.html?d={name}" title="3D curtain viewer: {name}"
         style="width:100%; height:86vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
@@ -77,6 +80,46 @@ def fmt_per_day(e):
     return f"≈ {km / days:.0f} km/day" if km is not None and days else ""
 
 
+
+
+def file_meta(path):
+    """Deployment name and project from a file's global attributes (cheap: no data read).
+    Project is shortened to the text before any ':' ("FREEBYRD: Estimate ..." -> "FREEBYRD")."""
+    import netCDF4
+    with netCDF4.Dataset(path) as ds:
+        name = str(getattr(ds, "deployment_name", "") or Path(path).stem).strip()
+        full = str(getattr(ds, "project", "") or "").strip()
+    return {"name": name, "project": full.split(":")[0].strip(), "projectFull": full}
+
+
+def fmt_area(e):
+    """'63.76–62.21°S, 61.85–57.32°W' (ranges ordered by absolute value)."""
+    def rng(a, b, pos, neg):
+        h = pos if (a + b) / 2 >= 0 else neg
+        lo, hi = sorted((abs(a), abs(b)))
+        return f"{lo:.2f}–{hi:.2f}°{h}"
+    return f"{rng(*e['latRange'], 'N', 'S')}, {rng(*e['lonRange'], 'E', 'W')}"
+
+
+def write_summary(index):
+    """_summary.md, included on the home page: deployments per region, years, projects, distance."""
+    from collections import OrderedDict as OD
+    groups = OD()
+    for e in index:
+        groups.setdefault(e.get("region") or "Other", []).append(e)
+    rows = []
+    for region, es in groups.items():
+        years = sorted({int(e["start"][:4]) for e in es})
+        yr = f"{years[0]}–{years[-1]}" if len(years) > 1 else f"{years[0]}"
+        projects = ", ".join(sorted({e.get("project") for e in es if e.get("project")})) or "—"
+        km = sum(e.get("distanceKm") or 0 for e in es)
+        rows.append(f"| {region} | {len(es)} | {yr} | {projects} | ≈ {round(km, -2):,.0f} km |")
+    total = sum(e.get("distanceKm") or 0 for e in index)
+    if len(groups) > 1:
+        rows.append(f"| **All** | **{len(index)}** | | | **≈ {round(total, -2):,.0f} km** |")
+    (ROOT / "_summary.md").write_text(
+        "| Region | Deployments | Years (start) | Projects | Distance (approx.) |\n"
+        "|---|---|---|---|---|\n" + "\n".join(rows) + "\n", encoding="utf-8")
 
 
 def fingerprint(path, chunk=1 << 20):
@@ -121,10 +164,13 @@ def main():
     print(f"{len(files)} glider files; {len(todo)} new or changed"
           + (" (--force)" if a.force else "") + f"; {len(files) - len(todo)} unchanged")
 
+    meta = {f: file_meta(f) for f in files}
+
     # 2. Overview map (always rebuilt from all files: a single small page)
     print("\n== Overview map ==")
     glider_tracks.build(files, ROOT / "map", "measurement", "auto", 2000, 1, "Glider deployments",
-                        link_template="../deployments/{name}.html", map_name="index.html", regions=regions)
+                        link_template="../deployments/{name}.html", map_name="index.html", regions=regions,
+                        extra={m["name"]: m for m in meta.values()})
     for extra in ("glider_positions.csv", "deployments_summary.csv"):
         (ROOT / "map" / extra).unlink(missing_ok=True)
 
@@ -139,7 +185,9 @@ def main():
     by_file = {Path(f).name: f for f in files}
     for e in index:
         if e.get("file") in by_file:
-            e["fingerprint"] = fps[by_file[e["file"]]]
+            f = by_file[e["file"]]
+            e["fingerprint"] = fps[f]
+            e["project"], e["projectFull"] = meta[f]["project"], meta[f]["projectFull"]
         la = (e["latRange"][0] + e["latRange"][1]) / 2
         lo = (e["lonRange"][0] + e["lonRange"][1]) / 2
         e["region"] = glider_tracks.assign_region([la], [lo], regions) if regions else ""
@@ -158,9 +206,11 @@ def main():
     (ROOT / "deployments").mkdir(exist_ok=True)
     for e in index:
         page = DEPLOYMENT_PAGE.format(
-            name=e["name"], region=e.get("region") or "", distance=fmt_distance(e), per_day=fmt_per_day(e), glider=e.get("glider") or "",
+            name=e["name"], region=e.get("region") or "", project=e.get("project") or "", distance=fmt_distance(e), per_day=fmt_per_day(e), glider=e.get("glider") or "",
             start=e["start"], end=e["end"], profiles=e["profiles"], maxDepth=e["maxDepth"],
-            lat0=e["latRange"][0], lat1=e["latRange"][1], lon0=e["lonRange"][0], lon1=e["lonRange"][1])
+            area=fmt_area(e),
+            project_note=(f" · **Project:** {e['projectFull']}"
+                          if e.get("projectFull") and e["projectFull"] != e.get("project") else ""))
         (ROOT / "deployments" / f"{e['name']}.qmd").write_text(page, encoding="utf-8")
     groups = OrderedDict()
     for e in index:
@@ -168,15 +218,16 @@ def main():
     parts = []
     for region, es in groups.items():
         rows = "\n".join(
-            f"| [{e['name']}](deployments/{e['name']}.qmd) | {e.get('glider', '')} | {e['start']} | {e['end']} "
+            f"| [{e['name']}](deployments/{e['name']}.qmd) | {e.get('project', '')} | {e.get('glider', '')} | {e['start']} | {e['end']} "
             f"| {e['profiles']:,} | {e['maxDepth']:.0f} m | {fmt_distance(e)} | {fmt_per_day(e)} |" for e in es)
         heading = f"## {region} ({len(es)})\n\n" if len(groups) > 1 else ""
-        parts.append(f"{heading}| Deployment | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |\n"
-                     f"|---|---|---|---|---|---|---|---|\n{rows}\n")
+        parts.append(f"{heading}| Deployment | Project | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |\n"
+                     f"|---|---|---|---|---|---|---|---|---|\n{rows}\n")
     (ROOT / "deployments.qmd").write_text(
         "---\ntitle: \"Deployments\"\n---\n\n"
         f"{len(index)} deployments. Click a name for its 3D curtain, depth-time section and T–S diagram.\n\n"
         + "\n".join(parts), encoding="utf-8")
+    write_summary(index)
     print(f"Wrote {len(index)} deployment pages. Next: commit and push (or open a pull request).")
 
 

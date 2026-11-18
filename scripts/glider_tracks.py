@@ -237,7 +237,7 @@ def decimate(n, max_points):
 
 
 def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_template=None, map_name="glider_map.html",
-          regions=None):
+          regions=None, extra=None):
     files = []
     for p in paths:
         p = Path(p)
@@ -300,6 +300,7 @@ def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_t
                 "lat": [round(float(x), 5) for x in la[idx]],
                 "lon": [round(float(x), 5) for x in lo[idx]],
                 "region": assign_region(la, lo, regions or []) if regions else "",
+                "project": ((extra or {}).get(name) or {}).get("project", ""),
             })
 
     sum_path = out_dir / "deployments_summary.csv"
@@ -408,6 +409,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <h2>Region <span class="links"><button id="rAll">All</button></span></h2>
       <div id="regions"></div>
     </div>
+    <div class="section" id="projectSec" style="display:none">
+      <h2>Project <span class="links"><button id="pAll">All</button></span></h2>
+      <div id="projects"></div>
+    </div>
     <div class="section">
       <h2>Start year <span class="links"><button id="yAll">All</button><button id="yNone">None</button></span></h2>
       <div id="years"></div>
@@ -488,6 +493,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     L.popup().setLatLng([d.lat[best], d.lon[best]]).setContent(
       `<div class="pop"><b>${esc(d.name)}</b><table>
        ${d.region ? `<tr><td>Region</td><td>${esc(d.region)}</td></tr>` : ''}
+       ${d.project ? `<tr><td>Project</td><td>${esc(d.project)}</td></tr>` : ''}
        <tr><td>Start</td><td>${fmtTime(d.start)}</td></tr>
        <tr><td>End</td><td>${fmtTime(d.end)}</td></tr>
        <tr><td>Duration</td><td>${days} days</td></tr>
@@ -540,6 +546,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     });
     document.getElementById('rAll').onclick = () => { regions.forEach(r => selRegions.add(r)); render(); fit(visible()); };
   }
+  // Projects: shown only when deployments belong to more than one project. Click toggles.
+  const projects = [...new Set(deps.map(d => d.project).filter(Boolean))].sort();
+  const selProjects = new Set(projects);
+  const projectsEl = document.getElementById('projects');
+  if (projects.length > 1) {
+    document.getElementById('projectSec').style.display = '';
+    projects.forEach(pj => {
+      const chip = document.createElement('span');
+      chip.className = 'chip'; chip.textContent = `${pj} (${deps.filter(d => d.project === pj).length})`; chip.dataset.project = pj;
+      chip.onclick = () => { selProjects.has(pj) ? selProjects.delete(pj) : selProjects.add(pj); render(); };
+      projectsEl.appendChild(chip);
+    });
+    document.getElementById('pAll').onclick = () => { projects.forEach(pj => selProjects.add(pj)); render(); };
+  }
   document.getElementById('yAll').onclick = () => { years.forEach(y => selYears.add(y)); render(); };
   document.getElementById('yNone').onclick = () => { selYears.clear(); render(); };
   document.getElementById('search').oninput = e => {
@@ -552,14 +572,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   const inYears = d => d.years.some(y => selYears.has(y));
   const inRegion = d => regions.length < 2 || selRegions.has(d.region);
+  const inProject = d => projects.length < 2 || selProjects.has(d.project);
   const matches = d => !query.length || query.some(q => d.name.toLowerCase().includes(q));
-  const shown = () => deps.filter(d => inRegion(d) && inYears(d) && matches(d));          // in the list
+  const shown = () => deps.filter(d => inRegion(d) && inProject(d) && inYears(d) && matches(d));          // in the list
   const visible = () => shown().filter(d => d.checked);                     // on the map
 
   const listEl = document.getElementById('list');
   function render() {
     [...yearsEl.children].forEach(c => c.classList.toggle('off', !selYears.has(+c.dataset.year)));
     [...regionsEl.children].forEach(c => c.classList.toggle('off', !selRegions.has(c.dataset.region)));
+    [...projectsEl.children].forEach(c => c.classList.toggle('off', !selProjects.has(c.dataset.project)));
     const s = shown(), v = new Set(visible());
     listEl.innerHTML = '';
     s.sort((a, b) => a.start - b.start).forEach(d => {
