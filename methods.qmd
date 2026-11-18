@@ -91,7 +91,10 @@ speed. GEBCO is partly interpolated away from survey lines and is not for naviga
 ## Regions and projects
 
 Each deployment is assigned to a region by its median position, using the lat/lon boxes in
-`regions.json` in the site's repository. The project is taken from the `project` attribute in
+`regions.json` in the site's repository: Antarctic Peninsula, Hawaii, and California split at
+36°N into Northern and Southern California (so each opens zoomed in on its own tracks). The
+overview map opens on the region with the most recent data; the buttons above it switch
+region, and `?region=<name>` (or `?region=All`) in the page address opens a given one. The project is taken from the `project` attribute in
 the deployment's NetCDF file and shown with a short label from `projects.json` in the
 site's repository (for example "CalCOFI Survey Augmentation" → "CalCOFI Augmentation"); the
 full name is shown on the deployment page. Projects not in that list are shortened to the text

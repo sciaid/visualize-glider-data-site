@@ -96,11 +96,13 @@ skipped by the build with a note.
 
 ### Regions
 
-`regions.json` lists named lat/lon boxes (Antarctic Peninsula, Hawaii, California). Each
-deployment is assigned by its median position; anything outside every box is "Other". When
-more than one region is present, the map gets a Region filter (opening on the region with the
-most deployments), the Deployments page is grouped by region, and the viewer's picker is
-grouped too. Edit the boxes or names freely, then rerun the build.
+`regions.json` lists named lat/lon boxes (Antarctic Peninsula, Hawaii, Northern and Southern
+California, split at 36°N). Each deployment is assigned by its median position; anything
+outside every box is "Other". When more than one region is present, the overview page shows
+region buttons above the map (`_regionbar.md`, opening on the region with the most recent data;
+`?region=<name>` or `?region=All` in the address overrides that), the map's year and project
+chips list only the selected region's, the Deployments page is grouped by region, and the
+viewer's picker is grouped too. Edit the boxes or names freely, then rerun the build.
 
 ### Project labels
 

@@ -31,10 +31,12 @@ Requirements: pip install netCDF4 numpy contourpy plotly
 """
 import argparse
 import hashlib
+import html
 import json
 import sys
 from collections import OrderedDict
 from pathlib import Path
+from urllib.parse import quote
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -169,13 +171,91 @@ def write_summary(index):
         km = sum(e.get("distanceKm") or 0 for e in es)
         nrt = sum(e.get("mode") == "realtime" for e in es)
         count = f"{len(es)}" + (f" ({nrt} real-time)" if nrt else "")
-        rows.append(f"| {region} | {count} | {yr} | {projects} | ≈ {round(km, -2):,.0f} km |")
+        label = f"[{region}](index.html?region={quote(region)})" if len(groups) > 1 else region
+        rows.append(f"| {label} | {count} | {yr} | {projects} | ≈ {round(km, -2):,.0f} km |")
     total = sum(e.get("distanceKm") or 0 for e in index)
     if len(groups) > 1:
         rows.append(f"| **All** | **{len(index)}** | | | **≈ {round(total, -2):,.0f} km** |")
     (ROOT / "_summary.md").write_text(
         "| Region | Deployments | Years (start) | Projects | Distance (approx.) |\n"
         "|---|---|---|---|---|\n" + "\n".join(rows) + "\n", encoding="utf-8")
+
+
+REGIONBAR = """```{=html}
+<div id="regionbar" class="regionbar" data-default="__DEFAULT__" __HIDE__>
+  <span class="rb-label">Region</span>
+__BUTTONS__
+</div>
+<iframe id="mapframe" title="Map of glider deployments"
+        style="width:100%; height:72vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
+<style>
+  .regionbar { display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin:0 0 10px; }
+  .regionbar .rb-label { align-self:center; font-weight:600; margin-right:4px; }
+  .regionbar button { text-align:left; border:1px solid #d6d3cc; background:#fff; border-radius:8px;
+                      padding:6px 12px; cursor:pointer; line-height:1.25; font:inherit; color:inherit; }
+  .regionbar button:hover { border-color:#2a78d6; }
+  .regionbar button[aria-pressed="true"] { border-color:#2a78d6; background:#eaf2fc; box-shadow:inset 0 0 0 1px #2a78d6; }
+  .regionbar .rb-name { display:block; font-weight:600; }
+  .regionbar .rb-meta { display:block; font-size:.82em; color:#5d5b56; }
+  .regionbar .rb-rt { color:#b4501a; font-weight:600; }
+</style>
+<script>
+(function () {
+  const bar = document.getElementById('regionbar'), frame = document.getElementById('mapframe');
+  const buttons = [...bar.querySelectorAll('button')];
+  const asked = new URLSearchParams(location.search).get('region');
+  const known = buttons.map(b => b.dataset.region);
+  let region = known.includes(asked) ? asked : bar.dataset.default;
+  function mark(r) {
+    region = r;
+    buttons.forEach(b => b.setAttribute('aria-pressed', b.dataset.region === r));
+    const u = new URL(location.href);
+    if (r === bar.dataset.default) u.searchParams.delete('region'); else u.searchParams.set('region', r);
+    history.replaceState(null, '', u);
+  }
+  frame.src = 'map/index.html?regionbar=' + (bar.hidden ? '0' : '1') + '&region=' + encodeURIComponent(region);
+  mark(region);
+  buttons.forEach(b => b.onclick = () => {
+    mark(b.dataset.region);
+    try { frame.contentWindow.setRegion(b.dataset.region); }
+    catch (e) { frame.src = 'map/index.html?regionbar=1&region=' + encodeURIComponent(b.dataset.region); }
+  });
+  window.addEventListener('message', e => {           // keep the buttons in step with the map
+    if (e.source === frame.contentWindow && e.data && e.data.glidermapRegion) mark(e.data.glidermapRegion);
+  });
+})();
+</script>
+```
+"""
+
+
+def write_regionbar(index):
+    """_regionbar.md: region buttons above the home-page map (plus the map iframe itself).
+
+    The map opens on the region whose most recent data are newest; ?region=<name> or
+    ?region=All in the page URL overrides that. With a single region the bar is hidden.
+    """
+    groups = {}
+    for e in index:
+        groups.setdefault(e.get("region") or "Other", []).append(e)
+    latest = max(groups, key=lambda r: max(e["end"] for e in groups[r])) if groups else ""
+    def button(name, es, label=None):
+        years = sorted({int(e["start"][:4]) for e in es})
+        yr = f"{years[0]}–{years[-1]}" if len(years) > 1 else (f"{years[0]}" if years else "")
+        nrt = sum(e.get("mode") == "realtime" for e in es)
+        rt = f' · <span class="rb-rt">{nrt} real-time</span>' if nrt else ""
+        n = len(es)
+        return (f'  <button type="button" data-region="{html.escape(name)}" aria-pressed="false">'
+                f'<span class="rb-name">{html.escape(label or name)}</span>'
+                f'<span class="rb-meta">{n} deployment{"s" if n != 1 else ""} · {yr}{rt}</span></button>')
+    order = sorted(groups, key=lambda r: max(e["end"] for e in groups[r]), reverse=True)
+    btns = [button(r, groups[r]) for r in order]
+    if len(groups) > 1:
+        btns.append(button("All", index, "All regions"))
+    text = (REGIONBAR.replace("__DEFAULT__", html.escape(latest))
+            .replace("__HIDE__", "" if len(groups) > 1 else "hidden")
+            .replace("__BUTTONS__", "\n".join(btns)))
+    (ROOT / "_regionbar.md").write_text(text, encoding="utf-8")
 
 
 def walk_nc(folder):
@@ -369,6 +449,7 @@ def main():
         f"{len(index)} deployments. Click a name for its 3D curtain, depth-time section and T–S diagram.\n\n"
         + "\n".join(parts), encoding="utf-8")
     write_summary(index)
+    write_regionbar(index)
     write_realtime(index, data_dir)
     if a.erddap_status and Path(a.erddap_status).exists():
         write_status(json.loads(Path(a.erddap_status).read_text(encoding="utf-8")), index)
