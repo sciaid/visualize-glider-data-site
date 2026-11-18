@@ -36,6 +36,15 @@ ERDDAP data are served by the U.S. IOOS Glider Data Assembly Center (DAC),
 in km east/north of the deployment's mean position. Vertical exaggeration is adjustable;
 land heights are scaled down so islands do not hide the curtain.
 
+**Surface or points.** The curtain and the section can be drawn as a continuous surface or as
+one point per 5 m bin that holds data (the *Curtain* control). Real-time data are thinned
+before transmission, so often only every other 5 m bin has a value, and transmissions can
+pause for hours to more than a day. A surface drops every cell next to an empty bin and is drawn
+straight across pauses, so real-time deployments open as points, where empty bins and pauses
+stay blank. Delayed-mode deployments open as a surface. Overlay lines (σθ contours,
+mixed-layer depth, chlorophyll-max depth) are broken wherever profiles are more than
+max(3 h, 4 × the median profile spacing) apart.
+
 **Depth–time section.** The same variable against time and depth, with the seafloor
 under the track, labelled σθ contours (lightly smoothed along time for display), and a
 sun strip showing day, civil twilight, nautical twilight and night for each profile.

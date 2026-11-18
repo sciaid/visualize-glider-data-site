@@ -134,7 +134,7 @@ def load(path, var_names, profile_step, bathy=None):
     x = (lon[idx] - lon0) * kx
     y = (lat[idx] - lat0) * 110.57
 
-    meta = {a: str(getattr(ds, a)) for a in ("deployment_name", "glider_name", "institution",
+    meta = {a: str(getattr(ds, a)) for a in ("deployment_name", "glider_name", "institution", "data_mode",
                                               "time_coverage_start", "time_coverage_end") if hasattr(ds, a)}
     name = meta.get("deployment_name") or Path(path).stem
     data = {
@@ -613,6 +613,8 @@ __PLOTLY__
 
   <h2>Vertical exaggeration <span id="exLabel" class="muted"></span></h2>
   <input type="range" id="ex" min="0" max="100" value="50">
+  <label class="line">Curtain <select id="style"><option value="surface">surface</option><option value="points">points (one per 5 m bin)</option></select></label>
+  <div class="muted" id="styleNote"></div>
   <label class="line"><input type="checkbox" id="track" checked> Show surface track</label>
   <div id="bathyCtl">
     <label class="line"><input type="checkbox" id="bathy" checked> Seafloor &amp; land</label>
@@ -707,6 +709,18 @@ __PLOTLY__
     }
     return out;
   };
+  // A "gap" is a pause between profiles longer than max(3 h, 4 x the median spacing); overlay
+  // lines are broken there instead of being drawn straight across missing data.
+  const GAP = (() => { const d = []; for (let i = 1; i < NP; i++) d.push(D.time[i] - D.time[i - 1]); d.sort((a, b) => a - b);
+                       return Math.max(3 * 3600, 4 * (d.length ? d[d.length >> 1] : 0)); })();
+  const breakGaps = (ts, ...series) => {      // insert nulls where consecutive times are > GAP apart
+    const out = series.map(() => []), tt = [];
+    for (let j = 0; j < ts.length; j++) {
+      if (j && ts[j] != null && ts[j - 1] != null && ts[j] - ts[j - 1] > GAP) { tt.push(null); out.forEach(o => o.push(null)); }
+      tt.push(ts[j]); series.forEach((s, q) => out[q].push(s[j]));
+    }
+    return [tt, ...out];
+  };
   const sunClass = e => e > -0.833 ? 3 : e > -6 ? 2 : e > -12 ? 1 : 0;
   const sunName = ['night', 'nautical twilight', 'civil twilight', 'day'];
   const cur = () => D.vars[st.v];
@@ -754,6 +768,17 @@ __PLOTLY__
   exEl.oninput = () => { document.getElementById('exLabel').textContent = `(${exVal()}×)`; };
   exEl.onchange = () => { exEl.oninput(); relayoutAspect(); };
   document.getElementById('track').onchange = e => { st.track = e.target.checked; draw(true); };
+  // Curtain style: points show only bins that hold data, so gaps in real-time data stay visible
+  // (a surface joins neighbouring profiles across a gap and drops cells next to an empty bin).
+  // Default: points for real-time data, surface otherwise; ?style=points|surface overrides.
+  const styleEl = document.getElementById('style');
+  const askedStyle = new URLSearchParams(location.search).get('style');
+  st.style = ['points', 'surface'].includes(askedStyle) ? askedStyle : (D.meta && D.meta.data_mode === 'realtime' ? 'points' : 'surface');
+  styleEl.value = st.style;
+  const styleNote = () => document.getElementById('styleNote').textContent =
+    st.style === 'points' ? 'Each point is a 5 m bin mean; empty bins and time gaps are left blank.' : '';
+  styleNote();
+  styleEl.onchange = () => { st.style = styleEl.value; styleNote(); draw(true); };
   if (B) {
     document.getElementById('bathy').onchange = e => { st.bathy = e.target.checked; draw(true); };
     document.getElementById('clip').onchange = e => { st.clip = e.target.checked; draw(true); };
@@ -781,7 +806,7 @@ __PLOTLY__
   function windowGrid() {
     const i0 = st.i0, i1 = st.i1, n = i1 - i0 + 1;
     // Downsample columns if very large, to keep WebGL responsive.
-    const step = Math.max(1, Math.ceil(n * ND / 600000));
+    const step = Math.max(1, Math.ceil(n * ND / (st.style === 'points' ? 200000 : 600000)));
     const cols = []; for (let i = i0; i <= i1; i += step) cols.push(i);
     return cols;
   }
@@ -829,7 +854,18 @@ __PLOTLY__
       hoverinfo: 'none', lighting: { ambient: 1, diffuse: 0, specular: 0, roughness: 1, fresnel: 0 },
       contours: { x: { highlight: false }, y: { highlight: false }, z: { highlight: false } },
     };
-    const traces = [surf];
+    let main3d = surf;
+    if (st.style === 'points') {            // one marker per bin that holds data
+      const px = [], py = [], pz = [], pc = [];
+      for (let k = 0; k < ND; k++) for (let j = 0; j < nc; j++) {
+        const c = cs[k][j]; if (!Number.isFinite(c)) continue;
+        px.push(xs[k][j]); py.push(ys[k][j]); pz.push(-D.depth[k]); pc.push(c);
+      }
+      main3d = { type: 'scatter3d', mode: 'markers', x: px, y: py, z: pz, hoverinfo: 'none',
+        marker: { size: 2.2, color: pc, colorscale: colorscale(v), cmin, cmax, opacity: 1, line: { width: 0 },
+                  colorbar: surf.colorbar, showscale: true } };
+    }
+    const traces = [main3d];
     if (st.track) {
       const all = []; for (let i = 0; i < NP; i += Math.max(1, Math.floor(NP / 4000))) all.push(i);
       traces.push({ type: 'scatter3d', mode: 'lines', x: all.map(i => X[i]), y: all.map(i => Y[i]), z: all.map(() => 0),
@@ -843,7 +879,8 @@ __PLOTLY__
       const xs3 = [], ys3 = [], zs3 = [];
       const sm = runMedian(cols.map(i => arr[i]), 7);
       cols.forEach((i, j) => { xs3.push(X[i]); ys3.push(Y[i]); zs3.push(sm[j] == null ? null : -sm[j]); });
-      traces.push({ type: 'scatter3d', mode: 'lines', x: xs3, y: ys3, z: zs3, connectgaps: false,
+      const [, bx, by, bz] = breakGaps(cols.map(i => D.time[i]), xs3, ys3, zs3);
+      traces.push({ type: 'scatter3d', mode: 'lines', x: bx, y: by, z: bz, connectgaps: false,
                     line: { color, width }, hoverinfo: 'skip', showlegend: false, name });
     };
     if (st.mld && MLD) line3d(MLD, '#ffffff', 5, 'MLD');
@@ -894,8 +931,16 @@ __PLOTLY__
     const z = [];
     for (let k = 0; k < ND; k++) { const r = new Array(cols.length); for (let j = 0; j < cols.length; j++) { const c = tr(v, v.arr[k * NP + cols[j]]); r[j] = Number.isFinite(c) ? c : null; } z.push(r); }
     const t = cols.map(i => timesISO[i]);
-    const trace = { type: 'heatmap', x: t, y: D.depth, z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
+    let trace = { type: 'heatmap', x: t, y: D.depth, z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
                     showscale: false, hoverinfo: 'none', connectgaps: false };
+    if (st.style === 'points') {            // same bins as markers: gaps stay blank
+      const px = [], py = [], pc = [];
+      for (let k = 0; k < ND; k++) for (let j = 0; j < cols.length; j++) {
+        if (z[k][j] == null) continue; px.push(t[j]); py.push(D.depth[k]); pc.push(z[k][j]);
+      }
+      trace = { type: 'scattergl', mode: 'markers', x: px, y: py, hoverinfo: 'none', showlegend: false,
+        marker: { size: 3, color: pc, colorscale: colorscale(v), cmin, cmax, line: { width: 0 } } };
+    }
     const shapes = (st.i0 > 0 || st.i1 < NP - 1) ? [
       { type: 'rect', xref: 'x', yref: 'paper', x0: timesISO[0], x1: timesISO[st.i0], y0: 0, y1: 1, fillcolor: '#fcfcfb', opacity: 0.5, line: { width: 0 } },
       { type: 'rect', xref: 'x', yref: 'paper', x0: timesISO[st.i1], x1: timesISO[NP - 1], y0: 0, y1: 1, fillcolor: '#fcfcfb', opacity: 0.5, line: { width: 0 } },
@@ -909,7 +954,8 @@ __PLOTLY__
     }
     if (st.sig && A.sigLines) {
       const L = A.sigLines;
-      traces2.push({ type: 'scattergl', mode: 'lines', x: L.t.map(v => v == null ? null : new Date(v * 1000).toISOString()), y: L.d,
+      const [lt, ld] = breakGaps(L.t, L.d);
+      traces2.push({ type: 'scattergl', mode: 'lines', x: lt.map(v => v == null ? null : new Date(v * 1000).toISOString()), y: ld,
         line: { color: 'rgba(11,11,11,0.5)', width: 0.8 }, connectgaps: false, hoverinfo: 'skip', name: 'σθ contours', showlegend: true });
       traces2.push({ type: 'scatter', mode: 'text', x: L.labels.map(l => new Date(l.t * 1000).toISOString()), y: L.labels.map(l => l.d),
         text: L.labels.map(l => l.txt), textfont: { size: 9, color: '#0b0b0b' }, hoverinfo: 'skip', showlegend: false, cliponaxis: true });
@@ -930,15 +976,17 @@ __PLOTLY__
         line: { color: 'rgba(11,11,11,0.55)', width: 0.7, smoothing: 0.8 }, colorscale: [[0, '#0b0b0b'], [1, '#0b0b0b']], name: 'σθ' });
     }
     if (st.mld && MLD) {
-      const y = runMedian(cols.map(i => MLD[i]), 7);
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#ffffff', width: 1.4 }, connectgaps: false, hoverinfo: 'skip',
+      const [tg, y] = breakGaps(cols.map(i => D.time[i]), runMedian(cols.map(i => MLD[i]), 7));
+      const tx = tg.map(v => v == null ? null : new Date(v * 1000).toISOString());
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#ffffff', width: 1.4 }, connectgaps: false, hoverinfo: 'skip',
                      name: 'Mixed-layer depth (Δσθ = 0.03)', showlegend: true });
     }
     if (st.chl && CHLMAX) {
-      const y = runMedian(cols.map(i => CHLMAX[i]), 7);
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
-      traces2.push({ type: 'scatter', mode: 'lines', x: t, y, line: { color: '#eb6834', width: 1.6 }, connectgaps: false, hoverinfo: 'skip',
+      const [tg, y] = breakGaps(cols.map(i => D.time[i]), runMedian(cols.map(i => CHLMAX[i]), 7));
+      const tx = tg.map(v => v == null ? null : new Date(v * 1000).toISOString());
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#0b0b0b', width: 3 }, connectgaps: false, hoverinfo: 'skip', showlegend: false });
+      traces2.push({ type: 'scattergl', mode: 'lines', x: tx, y, line: { color: '#eb6834', width: 1.6 }, connectgaps: false, hoverinfo: 'skip',
                      name: 'Chlorophyll-max depth', showlegend: true });
     }
     if (SUN) {
