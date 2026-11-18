@@ -326,7 +326,10 @@ def build(paths, out_dir, mode, group_by, max_map_points, workers, title, link_t
 
     map_path = out_dir / map_name
     built = {d["name"] for d in deployments}
-    deployments += [d for d in (keep_tracks or []) if d["name"] not in built]   # tracks from earlier runs
+    kept = [d for d in (keep_tracks or []) if d["name"] not in built]          # tracks from earlier runs
+    for d in kept:                                   # re-assign: regions.json may have changed
+        d["region"] = assign_region(d["lat"], d["lon"], regions) if regions else d.get("region", "")
+    deployments += kept
     deployments.sort(key=lambda d: d["start"])
     if link_template:
         for d in deployments:
