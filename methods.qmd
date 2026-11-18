@@ -27,6 +27,14 @@ with any new or updated datasets; the date of the last check is shown on the hom
 real-time pages. Deployments published from local L3 files are never replaced by their ERDDAP
 versions unless listed in `erddap.json` in the site's repository.
 
+**Variables.** Temperature, salinity, chlorophyll, oxygen, CDOM (coloured dissolved organic
+matter, in the files' units, ppb) and optical backscatter at 700 nm (m⁻¹ sr⁻¹) are shown when
+the deployment's file has data for them. Gliders carry different sensor packages: a variable
+the file lacks, or holds no values for, gets no button in the viewer and is listed as
+*not measured* on the deployment page. A variable recorded for fewer than 90% of a deployment's
+profiles (for example, a sensor that failed part-way through) shows the share of profiles
+that have it.
+
 ERDDAP data are served by the U.S. IOOS Glider Data Assembly Center (DAC),
 <https://gliders.ioos.us/>.
 
@@ -115,7 +123,8 @@ before any colon.
 ## Colour maps
 
 cmocean perceptually uniform colour maps (Thyng et al. 2016): *thermal* for temperature,
-*haline* for salinity, *algae* for chlorophyll (log scale by default), *deep* for oxygen.
+*haline* for salinity, *algae* for chlorophyll (log scale by default), *deep* for oxygen,
+*matter* for CDOM and *turbid* for 700 nm backscatter (log scale by default).
 
 ## References
 
