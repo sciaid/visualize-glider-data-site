@@ -18,7 +18,9 @@ Rules
   * A failed download keeps the deployment's previous grid; if ERDDAP cannot be reached at all,
     nothing changes. Problems are recorded in <folder>/ERDDAP/status.json.
   * Datasets are re-downloaded only when ERDDAP reports a change (date_modified or maxTime),
-    tracked in <folder>/ERDDAP/manifest.json. Raw downloads are deleted after gridding.
+    tracked in <folder>/ERDDAP/manifest.json. Raw downloads are deleted after gridding; for
+    real-time datasets the individual samples are kept in the grid file (dimension "sample") so the
+    viewer can plot them as transmitted.
 
 Output: <folder>/ERDDAP/<deployment>_erddap-<delayed|realtime>-5m.nc
 Gridding check: for calanus-20260824 the gridded ERDDAP data matched the local L3 file in
@@ -50,6 +52,11 @@ BASE_VARS = ["profile_id", "time", "latitude", "longitude", "depth"]
 KEEP_ATTRS = ["project", "institution", "creator_name", "summary", "title", "glider_name",
               "platform_type", "wmo_id", "date_modified", "license", "acknowledgment"]
 DZ, MAX_DEPTH = 5.0, 1200.0
+# Real-time grids also keep the individual samples (as transmitted) of these variables, so the
+# viewer can plot them as points. Bump FORMAT when the grid file layout changes: grids written
+# with an older FORMAT are downloaded again on the next run.
+SAMPLE_PLOT_VARS = ["temperature", "salinity", "chlorophyll", "oxygen_concentration"]
+FORMAT = 2
 BATHY_KEYS = ("gebco", "etopo", "bathy")
 ID_RE = re.compile(r"^(?P<base>.+?-\d{8})T\d{4}(?P<delayed>-delayed)?$")
 
@@ -158,6 +165,13 @@ def grid_dac(path, variables, dz=DZ, max_depth=MAX_DEPTH):
     k = np.clip(np.searchsorted(edges, depth, side="right") - 1, 0, centers.size - 1)
     ncell, cell = centers.size * profiles.size, k * profiles.size + inv
     out = {"depth": centers, "profile": profiles}
+    smp = {"profile": inv.astype("i4"), "depth": depth}              # individual samples, in file order
+    for name in ("time", "latitude", "longitude"):
+        smp[name] = _f(ds[name])[good]
+    for name in SAMPLE_PLOT_VARS:
+        if name in variables and name in ds.variables:
+            smp[name] = _f(ds[name])[good]
+    out["samples"] = smp
     for name in ("time", "latitude", "longitude"):           # one value per profile
         v = _f(ds[name])[good]
         f = np.isfinite(v)
@@ -196,7 +210,7 @@ def fill_density(g):
     g["potential_density"] = sigma0_eos80(g["salinity"], theta) + 1000.0
 
 
-def write_grid(g, info, row, url, path):
+def write_grid(g, info, row, url, path, samples=False):
     ds = netCDF4.Dataset(path, "w")
     ds.createDimension("depth", g["depth"].size)
     ds.createDimension("time", g["profile"].size)
@@ -222,7 +236,36 @@ def write_grid(g, info, row, url, path):
             v = ds.createVariable(name, "f4", ("depth", "time"), fill_value=np.float32(np.nan), zlib=True)
             v[:] = g[name].astype("f4")
             v.units = info["units"].get(name, "kg m-3" if name == "potential_density" else "")
+    if samples and "samples" in g:
+        write_samples(ds, g["samples"], info)
     ds.close()
+
+
+def write_samples(ds, smp, info):
+    """Individual samples (dimension "sample"): sample_time/depth/latitude/longitude, sample_profile
+    (column of the grid each sample was binned into) and sample_<variable>. Samples with no value in
+    any of the plotted variables are dropped. Sorted by time."""
+    names = [n for n in SAMPLE_PLOT_VARS if n in smp]
+    keep = np.zeros(smp["time"].size, bool)
+    for n in names:
+        keep |= np.isfinite(smp[n])
+    keep &= np.isfinite(smp["time"])
+    order = np.argsort(smp["time"][keep], kind="stable")
+    sel = lambda a: a[keep][order]
+    ds.createDimension("sample", int(keep.sum()))
+    def var(name, dtype, data, **attrs):
+        v = ds.createVariable(name, dtype, ("sample",), zlib=True,
+                              **({"fill_value": np.float32(np.nan)} if dtype == "f4" else {}))
+        v[:] = data
+        for k, val in attrs.items():
+            v.setncattr(k, val)
+    var("sample_time", "f8", sel(smp["time"]), units="seconds since 1970-01-01T00:00:00Z")
+    var("sample_depth", "f4", sel(smp["depth"]).astype("f4"), units="m", positive="down")
+    var("sample_latitude", "f8", sel(smp["latitude"]), units="degrees_north")
+    var("sample_longitude", "f8", sel(smp["longitude"]), units="degrees_east")
+    var("sample_profile", "i4", sel(smp["profile"]), long_name="index along the time dimension of this sample's profile")
+    for n in names:
+        var(f"sample_{n}", "f4", sel(smp[n]).astype("f4"), units=info["units"].get(n, ""))
 
 
 # --------------------------------------------------------------------------- #
@@ -290,7 +333,8 @@ def main(argv=None):
             continue
         prev = manifest.get(dep, {})
         changed = (a.force or prev.get("datasetID") != row["datasetID"]
-                   or prev.get("maxTime") != row["maxTime"] or not (out_dir / prev.get("file", "-")).exists())
+                   or prev.get("maxTime") != row["maxTime"] or prev.get("format") != FORMAT
+                   or not (out_dir / prev.get("file", "-")).exists())
         print(f"  {dep:28s} {row['mode']:8s} {row['datasetID']:40s} {'download' if changed else 'up to date'}")
         if changed:
             plan.append(row)
@@ -317,7 +361,7 @@ def main(argv=None):
             g = grid_dac(raw, [v for v in SAMPLE_VARS if v in info["variables"]])
             fill_density(g)
             name = f"{dep}_erddap-{row['mode']}-5m.nc"
-            write_grid(g, info, row, url, out_dir / name)
+            write_grid(g, info, row, url, out_dir / name, samples=row["mode"] == "realtime")
         except Exception as exc:                  # keep the previous grid of this deployment, if any
             status["errors"].append(f"{did}: {exc}")
             print(f"  FAILED: {exc} (keeping the previous version, if any)")
@@ -329,7 +373,8 @@ def main(argv=None):
             if p.name != name:
                 p.unlink()
         manifest[dep] = {"datasetID": did, "mode": row["mode"], "maxTime": row["maxTime"],
-                         "date_modified": info["globals"].get("date_modified", ""), "file": name}
+                         "date_modified": info["globals"].get("date_modified", ""), "file": name,
+                         "format": FORMAT}
         manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
         done += 1
         print(f"  {g['profile'].size} profiles x {g['depth'].size} bins -> {name}")
