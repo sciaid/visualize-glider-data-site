@@ -282,7 +282,11 @@ def walk_nc(folder):
 
 
 def write_realtime(index, data_dir):
-    """realtime.qmd: deployments shown from real-time data, with latest position and data age."""
+    """realtime.qmd: deployments shown from real-time data, with latest position and data age, and
+    the map of gliders out now with forecast and observed currents (realtime_map/, data from
+    fetch_currents.py in currents/currents.json)."""
+    import currents_map
+    currents_map.write_map(ROOT / "realtime_map")
     import datetime as dt
     now = dt.datetime.now(dt.timezone.utc)
     rows = []
@@ -312,6 +316,16 @@ quality-controlled and may have gaps; ERDDAP is updated every few days while a g
 Each deployment moves to delayed-mode data automatically when that is published.
 
 {{{{< include _status.md >}}}}
+
+## Gliders out now and ocean currents
+
+Model currents are a forecast; switch layers, pick the day and the depth range in the panel.
+See [Methods](methods.qmd#ocean-currents-on-the-real-time-map) for the sources.
+
+<iframe src="realtime_map/index.html" title="Map of gliders out now with ocean currents"
+        style="width:100%; height:78vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
+
+## Real-time datasets
 
 {body}
 """, encoding="utf-8")

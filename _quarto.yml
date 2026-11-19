@@ -5,6 +5,8 @@ project:
   resources:
     - "map/**"
     - "viewer/**"
+    - "realtime_map/**"
+    - "currents/**"
 
 website:
   title: "ESD glider deployments"
@@ -21,7 +23,7 @@ website:
       - href: methods.qmd
         text: Methods
   page-footer:
-    center: "Glider data: NOAA SWFSC Ecosystem Science Division Glider Team (CC0-1.0), via the IOOS Glider Data Assembly Center. Bathymetry: GEBCO_2026 Grid."
+    center: "Glider data: NOAA SWFSC Ecosystem Science Division Glider Team (CC0-1.0), via the IOOS Glider Data Assembly Center. Bathymetry: GEBCO_2026 Grid. Ocean currents: generated using E.U. Copernicus Marine Service Information; HF radar from CORDC/Scripps via NOAA CoastWatch."
 
 format:
   html:

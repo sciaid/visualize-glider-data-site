@@ -119,6 +119,20 @@ Put one GEBCO grid per region (download at [download.gebco.net](https://download
 positions (the smallest such grid if several do); deployments with no covering grid are
 built without seafloor and the build prints a note.
 
+## Ocean currents on the real-time page
+
+`scripts/fetch_currents.py` runs in the daily build. For each glider sending real-time data it
+writes `currents/currents.json` (not committed): Copernicus Marine model currents (yesterday to
++5 days, every model level down to the glider's dive depth) and, on the US West Coast, HF radar
+surface currents for the last 24 h. `realtime_map/index.html` (written by `build_site.py` from
+`scripts/currents_map.py`) draws them, with day and depth sliders.
+
+The model layer needs a free Copernicus Marine account
+(<https://data.marine.copernicus.eu/register>). Add its user name and password as repository
+secrets named `COPERNICUSMARINE_SERVICE_USERNAME` and `COPERNICUSMARINE_SERVICE_PASSWORD`
+(Settings → Secrets and variables → Actions → New repository secret). Without them the map
+shows the gliders and HF radar only, with a note.
+
 ## Size
 
 About 120 MB of data for 16 deployments (~7.5 MB each). GitHub Pages allows published sites up to
