@@ -22,7 +22,7 @@ profile's samples are averaged into 5 m depth bins. For a deployment available b
 (calanus-20260824) this reproduced the L3 file to within 0.001 °C in every bin. Delayed-mode
 data are used when published. Until then, real-time data are shown and labelled
 **real-time (provisional)**: they are thinned, not quality-controlled and may have gaps. Each
-deployment page links to its ERDDAP dataset. The site checks ERDDAP once a day and rebuilds
+deployment page and the Deployments table link to its ERDDAP dataset (deployments shown from local L3 files say "no ERDDAP dataset yet"). The site checks ERDDAP once a day and rebuilds
 with any new or updated datasets; the date of the last check is shown on the home and
 real-time pages. Deployments published from local L3 files are never replaced by their ERDDAP
 versions unless listed in `erddap.json` in the site's repository.
@@ -85,14 +85,23 @@ civil twilight to −6°, nautical twilight to −12°, night below.
 
 ## Track distance
 
-The distance shown for each deployment is the sum of great-circle (haversine) distances
-between consecutive profile positions, in time order. The gridded files store one position
-per profile, not the glider's GPS surface fixes, so the figure is approximate. For these 16
-deployments, summing only every 2nd profile gives totals 3–13% lower and every 5th profile
-7–27% lower, because part of the
-along-track wiggle between profiles is real path curvature and part is position noise that
-the gridded files cannot separate. It is distance over ground, including drift with currents,
-not distance through the water. The average per day is the total distance divided by the time from the first to the last
+The distance shown for each deployment is an **estimate**: the sum of great-circle (haversine)
+distances between consecutive profile positions, in time order.
+
+* **Positions are not GPS fixes.** The gridded files (local L3 and the site's ERDDAP grids) hold
+  one position per profile. A glider gets a GPS fix only when it surfaces; positions of the
+  profiles in between are dead-reckoned or interpolated between fixes. The raw GPS fixes are not
+  in these files, so they cannot be used here.
+* **The total depends on how finely the track is sampled.** Small zig-zags between consecutive
+  profiles, some real and some position error, add up. For stenella-20261103 (real-time data to
+  16 Nov 2026), using every profile gives 276 km, one position per hour 263 km, one every 6 h
+  219 km and one every 12 h 206 km. For the 16 Antarctic deployments, using every 2nd profile
+  gives totals 3–13% lower and every 5th profile 7–27% lower.
+* **It is distance over ground**, including drift with currents, not distance through the water.
+* **It can differ from a pilot's figure** (for example the distance reported by SFMC), which may
+  use GPS fixes, a different time span or a different method.
+
+The average per day is the total distance divided by the time from the first to the last
 profile, so it includes any pauses or gaps in the deployment.
 
 ## Bathymetry and land

@@ -1,24 +1,97 @@
 ---
 title: "Deployments"
+page-layout: full
 ---
 
-16 deployments. Click a name for its 3D curtain, depth-time section and T–S diagram.
+Click a name for its 3D curtain, depth–time section and T–S diagram; click a column heading to sort. \* Distance and per-day figures are estimates (see [Methods](methods.qmd#track-distance)).
 
-| Deployment | Project | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |
-|---|---|---|---|---|---|---|---|---|
-| [amlr02-20181211](deployments/amlr02-20181211.qmd) | FREEBYRD | amlr02 | 2018-12-11 | 2019-03-08 | 2,279 | 992 m | ≈ 1,750 km | ≈ 20 km/day |
-| [amlr01-20181216](deployments/amlr01-20181216.qmd) | FREEBYRD | amlr01 | 2018-12-16 | 2019-03-08 | 1,059 | 992 m | ≈ 1,790 km | ≈ 22 km/day |
-| [amlr02-20191206](deployments/amlr02-20191206.qmd) | FREEBYRD | amlr02 | 2019-12-06 | 2020-03-12 | 2,382 | 942 m | ≈ 2,200 km | ≈ 23 km/day |
-| [amlr03-20191206](deployments/amlr03-20191206.qmd) | FREEBYRD | amlr03 | 2019-12-06 | 2020-03-12 | 1,227 | 952 m | ≈ 2,310 km | ≈ 24 km/day |
-| [amlr01-20191216](deployments/amlr01-20191216.qmd) | FREEBYRD | amlr01 | 2019-12-16 | 2020-03-12 | 1,060 | 948 m | ≈ 1,990 km | ≈ 23 km/day |
-| [amlr01-20211121](deployments/amlr01-20211121.qmd) | FREEBYRD | amlr01 | 2021-11-21 | 2021-12-18 | 1,392 | 482 m | ≈ 590 km | ≈ 22 km/day |
-| [amlr05-20211124](deployments/amlr05-20211124.qmd) | FREEBYRD | amlr05 | 2021-11-25 | 2021-12-15 | 536 | 958 m | ≈ 510 km | ≈ 25 km/day |
-| [amlr07-20221204](deployments/amlr07-20221204.qmd) | FREEBYRD | amlr07 | 2022-12-04 | 2022-12-25 | 280 | 968 m | ≈ 450 km | ≈ 22 km/day |
-| [amlr04-20221205](deployments/amlr04-20221205.qmd) | FREEBYRD | amlr04 | 2022-12-05 | 2023-02-13 | 1,513 | 962 m | ≈ 2,000 km | ≈ 28 km/day |
-| [amlr06-20221205](deployments/amlr06-20221205.qmd) | FREEBYRD | amlr06 | 2022-12-05 | 2023-02-05 | 1,013 | 962 m | ≈ 1,690 km | ≈ 27 km/day |
-| [amlr03-20231128](deployments/amlr03-20231128.qmd) | FREEBYRD | amlr03 | 2023-11-28 | 2024-01-27 | 1,158 | 902 m | ≈ 1,640 km | ≈ 27 km/day |
-| [amlr04-20231128](deployments/amlr04-20231128.qmd) | FREEBYRD | amlr04 | 2023-11-28 | 2024-01-27 | 1,122 | 918 m | ≈ 1,400 km | ≈ 23 km/day |
-| [amlr01-20241120](deployments/amlr01-20241120.qmd) | FREEBYRD | amlr01 | 2024-11-20 | 2025-01-02 | 778 | 912 m | ≈ 1,130 km | ≈ 26 km/day |
-| [amlr08-20241120](deployments/amlr08-20241120.qmd) | FREEBYRD | amlr08 | 2024-11-20 | 2024-11-24 | 102 | 922 m | ≈ 130 km | ≈ 37 km/day |
-| [amlr02-20251123](deployments/amlr02-20251123.qmd) | FREEBYRD | amlr02 | 2025-11-23 | 2025-11-29 | 206 | 968 m | ≈ 130 km | ≈ 21 km/day |
-| [amlr30-20260114](deployments/amlr30-20260114.qmd) | FREEBYRD | amlr30 | 2026-01-14 | 2026-02-02 | 439 | 898 m | ≈ 430 km | ≈ 23 km/day |
+```{=html}
+<div class="dep-controls">
+  <input type="search" id="depSearch" placeholder="Search deployments or projects" aria-label="Search">
+  <select id="depRegion" aria-label="Region"><option value="">All regions</option><option value="Antarctic Peninsula">Antarctic Peninsula</option></select>
+  <select id="depProject" aria-label="Project"><option value="">All projects</option><option value="FREEBYRD">FREEBYRD</option></select>
+  <select id="depYear" aria-label="Start year"><option value="">All years</option><option value="2026">2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option><option value="2021">2021</option><option value="2019">2019</option><option value="2018">2018</option></select>
+  <label><input type="checkbox" id="depRt"> Real-time only</label>
+  <span id="depCount" class="dep-count"></span>
+</div>
+<div class="table-responsive">
+<table class="table table-sm table-striped table-hover dep-table" id="depTable">
+<thead><tr>
+  <th data-type="text">Deployment</th><th data-type="text">Region</th><th data-type="text">Project</th>
+  <th data-type="text">Start</th><th data-type="text">End</th>
+  <th data-type="num">Profiles</th><th data-type="num">Max depth</th>
+  <th data-type="num" title="Estimate: see Methods">Distance*</th><th data-type="num">Per day*</th><th data-type="text">ERDDAP data</th>
+</tr></thead>
+<tbody>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2026" data-mode=""><td><a href="deployments/amlr30-20260114.html">amlr30-20260114</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2026-01-14</td><td>2026-02-02</td><td data-sort="439">439</td><td data-sort="898">898 m</td><td data-sort="430.5">≈ 430 km</td><td data-sort="22.89">≈ 23 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2025" data-mode=""><td><a href="deployments/amlr02-20251123.html">amlr02-20251123</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2025-11-23</td><td>2025-11-29</td><td data-sort="206">206</td><td data-sort="968">968 m</td><td data-sort="125.1">≈ 130 km</td><td data-sort="21.2">≈ 21 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2024" data-mode=""><td><a href="deployments/amlr01-20241120.html">amlr01-20241120</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2024-11-20</td><td>2025-01-02</td><td data-sort="778">778</td><td data-sort="912">912 m</td><td data-sort="1127.9">≈ 1,130 km</td><td data-sort="26.21">≈ 26 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2024" data-mode=""><td><a href="deployments/amlr08-20241120.html">amlr08-20241120</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2024-11-20</td><td>2024-11-24</td><td data-sort="102">102</td><td data-sort="922">922 m</td><td data-sort="125.3">≈ 130 km</td><td data-sort="37.07">≈ 37 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2023" data-mode=""><td><a href="deployments/amlr03-20231128.html">amlr03-20231128</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2023-11-28</td><td>2024-01-27</td><td data-sort="1158">1,158</td><td data-sort="902">902 m</td><td data-sort="1635.1">≈ 1,640 km</td><td data-sort="27.43">≈ 27 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2023" data-mode=""><td><a href="deployments/amlr04-20231128.html">amlr04-20231128</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2023-11-28</td><td>2024-01-27</td><td data-sort="1122">1,122</td><td data-sort="918">918 m</td><td data-sort="1398.5">≈ 1,400 km</td><td data-sort="23.44">≈ 23 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2022" data-mode=""><td><a href="deployments/amlr04-20221205.html">amlr04-20221205</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2022-12-05</td><td>2023-02-13</td><td data-sort="1513">1,513</td><td data-sort="962">962 m</td><td data-sort="1995.6">≈ 2,000 km</td><td data-sort="28.42">≈ 28 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2022" data-mode=""><td><a href="deployments/amlr06-20221205.html">amlr06-20221205</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2022-12-05</td><td>2023-02-05</td><td data-sort="1013">1,013</td><td data-sort="962">962 m</td><td data-sort="1694.5">≈ 1,690 km</td><td data-sort="27.36">≈ 27 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2022" data-mode=""><td><a href="deployments/amlr07-20221204.html">amlr07-20221204</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2022-12-04</td><td>2022-12-25</td><td data-sort="280">280</td><td data-sort="968">968 m</td><td data-sort="448.4">≈ 450 km</td><td data-sort="21.79">≈ 22 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2021" data-mode=""><td><a href="deployments/amlr05-20211124.html">amlr05-20211124</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2021-11-25</td><td>2021-12-15</td><td data-sort="536">536</td><td data-sort="958">958 m</td><td data-sort="508.4">≈ 510 km</td><td data-sort="25.32">≈ 25 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2021" data-mode=""><td><a href="deployments/amlr01-20211121.html">amlr01-20211121</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2021-11-21</td><td>2021-12-18</td><td data-sort="1392">1,392</td><td data-sort="482">482 m</td><td data-sort="589.6">≈ 590 km</td><td data-sort="22.28">≈ 22 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2019" data-mode=""><td><a href="deployments/amlr01-20191216.html">amlr01-20191216</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2019-12-16</td><td>2020-03-12</td><td data-sort="1060">1,060</td><td data-sort="948">948 m</td><td data-sort="1985.8">≈ 1,990 km</td><td data-sort="22.83">≈ 23 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2019" data-mode=""><td><a href="deployments/amlr02-20191206.html">amlr02-20191206</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2019-12-06</td><td>2020-03-12</td><td data-sort="2382">2,382</td><td data-sort="942">942 m</td><td data-sort="2197.6">≈ 2,200 km</td><td data-sort="22.74">≈ 23 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2019" data-mode=""><td><a href="deployments/amlr03-20191206.html">amlr03-20191206</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2019-12-06</td><td>2020-03-12</td><td data-sort="1227">1,227</td><td data-sort="952">952 m</td><td data-sort="2312.6">≈ 2,310 km</td><td data-sort="23.86">≈ 24 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2018" data-mode=""><td><a href="deployments/amlr01-20181216.html">amlr01-20181216</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2018-12-16</td><td>2019-03-08</td><td data-sort="1059">1,059</td><td data-sort="992">992 m</td><td data-sort="1785.8">≈ 1,790 km</td><td data-sort="21.85">≈ 22 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+<tr data-region="Antarctic Peninsula" data-project="FREEBYRD" data-year="2018" data-mode=""><td><a href="deployments/amlr02-20181211.html">amlr02-20181211</a></td><td>Antarctic Peninsula</td><td>FREEBYRD</td><td>2018-12-11</td><td>2019-03-08</td><td data-sort="2279">2,279</td><td data-sort="992">992 m</td><td data-sort="1745.6">≈ 1,750 km</td><td data-sort="20.19">≈ 20 km/day</td><td><span class="dep-none">no ERDDAP dataset yet</span></td></tr>
+</tbody></table></div>
+<style>
+  .dep-controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 10px; }
+  .dep-controls input[type=search] { min-width:240px; flex:1 1 240px; }
+  .dep-controls input[type=search], .dep-controls select { padding:4px 8px; border:1px solid #d6d3cc; border-radius:6px; font:inherit; }
+  .dep-count { color:#6c757d; font-size:.9em; margin-left:auto; }
+  .dep-table th { cursor:pointer; white-space:nowrap; user-select:none; }
+  .dep-table th::after { content:" \2195"; color:#b9b7b1; font-size:.8em; }
+  .dep-table th.asc::after { content:" \2191"; color:inherit; }
+  .dep-table th.desc::after { content:" \2193"; color:inherit; }
+  .dep-table { font-size:.9em; }
+  .dep-table td { white-space:nowrap; }
+  .dep-table td:nth-child(2), .dep-table td:nth-child(3), .dep-table td:last-child { white-space:normal; min-width:7em; }
+  .dep-rt { color:#b4501a; font-style:italic; }
+  .dep-none { color:#6c757d; font-style:italic; }
+</style>
+<script>
+(function () {
+  const table = document.getElementById('depTable'), body = table.tBodies[0];
+  const rows = [...body.rows];
+  const q = document.getElementById('depSearch'), reg = document.getElementById('depRegion'),
+        prj = document.getElementById('depProject'), yr = document.getElementById('depYear'),
+        rt = document.getElementById('depRt'), count = document.getElementById('depCount');
+  const params = new URLSearchParams(location.search);          // ?region=, ?project=, ?year=, ?search=, ?rt=1
+  if (params.get('region')) reg.value = params.get('region');
+  if (params.get('project')) prj.value = params.get('project');
+  if (params.get('year')) yr.value = params.get('year');
+  if (params.get('search')) q.value = params.get('search');
+  if (params.get('rt') === '1') rt.checked = true;
+  function filter() {
+    const s = q.value.trim().toLowerCase();
+    let n = 0;
+    rows.forEach(r => {
+      const d = r.dataset;
+      const ok = (!s || r.textContent.toLowerCase().includes(s)) && (!reg.value || d.region === reg.value)
+              && (!prj.value || d.project === prj.value) && (!yr.value || d.year === yr.value)
+              && (!rt.checked || d.mode === 'realtime');
+      r.style.display = ok ? '' : 'none'; if (ok) n++;
+    });
+    count.textContent = `Showing ${n} of ${rows.length} deployments`;
+  }
+  [q, reg, prj, yr, rt].forEach(el => el.addEventListener('input', filter));
+  [...table.tHead.rows[0].cells].forEach((th, c) => th.addEventListener('click', () => {
+    const asc = !th.classList.contains('asc');
+    [...th.parentNode.cells].forEach(x => x.classList.remove('asc', 'desc'));
+    th.classList.add(asc ? 'asc' : 'desc');
+    const num = th.dataset.type === 'num';
+    const key = r => { const cell = r.cells[c], v = cell.dataset.sort ?? cell.textContent.trim();
+                       return num ? (v === '' ? -Infinity : +v) : v.toLowerCase(); };
+    rows.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1); });
+    rows.forEach(r => body.appendChild(r));
+  }));
+  filter();
+})();
+</script>
+```

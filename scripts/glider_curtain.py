@@ -494,9 +494,10 @@ def _coastline(blat, blon, z, lat0, lon0, kx):
 
 
 def track_distance_km(lat, lon):
-    """Approximate distance over ground: sum of great-circle (haversine) distances between
-    consecutive profile positions, in time order. Gridded files hold one position per profile,
-    not the GPS surface fixes, so this is an estimate (see the methods page)."""
+    """Estimated track length: sum of great-circle (haversine) distances between consecutive
+    profile positions, in time order. Gridded files hold one position per profile, not the GPS
+    surface fixes; positions of profiles between surfacings are dead-reckoned or interpolated, and
+    the total depends on how finely the track is sampled. An estimate only (see the methods page)."""
     la, lo = np.radians(np.asarray(lat, float)), np.radians(np.asarray(lon, float))
     a = (np.sin(np.diff(la) / 2) ** 2
          + np.cos(la[:-1]) * np.cos(la[1:]) * np.sin(np.diff(lo) / 2) ** 2)
