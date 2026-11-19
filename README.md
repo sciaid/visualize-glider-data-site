@@ -123,8 +123,11 @@ built without seafloor and the build prints a note.
 
 `scripts/fetch_currents.py` runs in the daily build. For each glider sending real-time data it
 writes `currents/currents.json` (not committed): Copernicus Marine model currents (yesterday to
-+5 days, every model level down to the glider's dive depth) and, on the US West Coast, HF radar
-surface currents for the last 24 h. `realtime_map/index.html` (written by `build_site.py` from
++5 days, every model level down to the glider's dive depth), on the US West Coast NOAA WCOFS
+model currents and HF radar surface currents for the last 24 h, and the glider's own
+depth-averaged currents for the last 7 days (`u`, `v` from the real-time dataset, which
+`fetch_erddap.py` keeps in each real-time grid as `dac_u`, `dac_v`, ...; values that cannot be
+real, such as `u` equal to `v` for every dive, are left off with a note). `realtime_map/index.html` (written by `build_site.py` from
 `scripts/currents_map.py`) draws them, with day and depth sliders.
 
 The model layer needs a free Copernicus Marine account

@@ -1,6 +1,7 @@
 """
 currents_map.py - The real-time map page (realtime_map/index.html): gliders that are out now,
-with model current forecasts (depth slider, day slider) and observed HF radar currents.
+with model current forecasts (depth slider, day slider), observed HF radar currents and the
+gliders' own depth-averaged currents.
 
 The page reads ../currents/currents.json, written each day by fetch_currents.py. It is a static
 template; build_site.py writes it with write_map().
@@ -60,6 +61,8 @@ HTML = r"""<!DOCTYPE html>
   <h2>Observed current</h2>
   <label class="line"><input type="checkbox" id="hOn" checked> HF radar, mean of the last 24 h</label>
   <div class="muted" id="hfrNote"></div>
+  <label class="line"><input type="checkbox" id="dOn" checked> Glider-measured, depth-averaged over each dive (last 7 days)</label>
+  <div class="muted" id="dacNote"></div>
 
   <h2>Track</h2>
   <label class="line"><input type="checkbox" id="tOn" checked> Glider tracks</label>
@@ -76,13 +79,13 @@ HTML = r"""<!DOCTYPE html>
   const RAMP = ['#cfe1f6', '#a8c9ef', '#7fb0e7', '#5598e7', '#3987e5', '#2a78d6', '#1c5cab', '#184f95', '#104281', '#0d366b'];
   const MAXS = 0.6;
   const colorFor = s => RAMP[Math.min(RAMP.length - 1, Math.floor(s / MAXS * RAMP.length))];
-  const HFR_COLOR = '#d95926';
+  const HFR_COLOR = '#d95926', DAC_COLOR = '#7a3db8';
 
   const map = L.map('map', { worldCopyJump: true }).setView([0, -120], 2);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
     { maxZoom: 13, attribution: 'Tiles &copy; Esri, GEBCO, NOAA, NGS' }).addTo(map);
   L.control.scale({ imperial: false }).addTo(map);
-  const arrowsModel = L.layerGroup().addTo(map), arrowsHfr = L.layerGroup().addTo(map), tracks = L.layerGroup().addTo(map);
+  const arrowsModel = L.layerGroup().addTo(map), arrowsHfr = L.layerGroup().addTo(map), arrowsDac = L.layerGroup().addTo(map), tracks = L.layerGroup().addTo(map);
   const renderer = L.canvas({ padding: 0.3 });
 
   let C;
@@ -192,6 +195,25 @@ HTML = r"""<!DOCTYPE html>
       'None near the gliders that are out (HF radar covers the US West Coast only).';
   }
 
+  // Glider-measured depth-averaged current: one arrow per dive segment, at the segment's position
+  function drawDac() {
+    arrowsDac.clearLayers();
+    const on = document.getElementById('dOn').checked, notes = [];
+    G.forEach(g => {
+      const d = g.dac; if (!d) return;
+      if (d.status !== 'ok') { notes.push(`${g.name}: not shown (${d.reason})`); return; }
+      notes.push(`${g.name}: ${d.u.length} dives`);
+      if (!on) return;
+      d.u.forEach((u, i) => {
+        arrow(arrowsDac, d.lat[i], d.lon[i], u, d.v[i], 0.08, DAC_COLOR);
+        L.circleMarker([d.lat[i], d.lon[i]], { radius: 2.5, weight: 0, fillColor: DAC_COLOR, fillOpacity: 1, renderer })
+          .bindTooltip(`${esc(g.name)}, ${fmtT(d.t[i])}<br>${fmtCur([u, d.v[i]])} (depth-averaged, glider)`)
+          .addTo(arrowsDac);
+      });
+    });
+    document.getElementById('dacNote').textContent = notes.length ? notes.join(' · ') : 'No glider is out.';
+  }
+
   // ---- gliders
   const list = document.getElementById('gliders');
   if (G.length) list.textContent = '';
@@ -238,6 +260,12 @@ HTML = r"""<!DOCTYPE html>
       rows += `<tr><td colspan="2" style="padding-top:6px;color:inherit"><b>HF radar, last 24 h</b></td></tr>` +
               `<tr><td>Surface</td><td>${c >= 0 ? fmtCur([gr.u[c], gr.v[c]]) : '—'}</td></tr>`;
     }
+    if (g.dac) {
+      const d = g.dac, n = d.u ? d.u.length - 1 : -1;
+      rows += `<tr><td colspan="2" style="padding-top:6px;color:inherit"><b>Glider-measured, depth-averaged</b></td></tr>` +
+              (n >= 0 ? `<tr><td>Last dive</td><td>${fmtCur([d.u[n], d.v[n]])}</td></tr><tr><td></td><td class="muted">${fmtT(d.t[n])}; compare with the model 0–dive mean</td></tr>`
+                      : `<tr><td></td><td>not shown: ${esc(d.reason || 'no data')}</td></tr>`);
+    }
     return `<div class="pop"><b>${esc(g.name)}</b><table>${rows}</table></div>`;
   }
 
@@ -248,6 +276,7 @@ HTML = r"""<!DOCTYPE html>
     d.innerHTML = `<b>Model current</b><div class="ramp">${RAMP.map(c => `<span style="background:${c}"></span>`).join('')}</div>` +
       `<div class="ticks"><span>0</span><span>${(MAXS / 2).toFixed(1)}</span><span>${MAXS}+ m/s</span></div>` +
       `<div><span style="color:${HFR_COLOR};font-weight:700">→</span> HF radar (observed)</div>` +
+      `<div><span style="color:${DAC_COLOR};font-weight:700">→</span> glider-measured, depth-averaged</div>` +
       `<div><span style="display:inline-block;width:16px;height:3px;background:#0b0b0b;vertical-align:middle"></span> last 7 days of track</div>`;
     return d;
   };
@@ -258,15 +287,17 @@ HTML = r"""<!DOCTYPE html>
   if (anyM('model')) { const m = anyM('model').model; src.push(`Model: <a href="${m.doi}" target="_blank">${esc(m.source)}</a>, run of ${esc(m.today)}.`); }
   if (anyM('wcofs')) { const m = anyM('wcofs').wcofs; src.push(`Model: <a href="${m.doi}" target="_blank">${esc(m.source)}</a>, run of ${esc(m.run)}.`); }
   if (G.some(g => g.hfr)) src.push(`Observed: ${esc(G.find(g => g.hfr).hfr.source)}.`);
+  if (G.some(g => g.dac && g.dac.status === 'ok')) src.push('Glider-measured: u and v from each real-time dataset on the IOOS Glider DAC.');
   if (C.made) src.push(`Updated ${esc(C.made)} by the daily site build.`);
   document.getElementById('sources').innerHTML = src.join('<br>');
 
   dayEl.oninput = depthEl.oninput = drawModel;
   document.getElementById('mOn').onchange = drawModel;
   document.getElementById('hOn').onchange = drawHfr;
+  document.getElementById('dOn').onchange = drawDac;
   document.getElementById('tOn').onchange = e => e.target.checked ? tracks.addTo(map) : map.removeLayer(tracks);
   if (!models.length) { document.getElementById('dayLabel').textContent = 'no model data'; document.getElementById('depthLabel').textContent = '—'; }
-  drawModel(); drawHfr();
+  drawModel(); drawHfr(); drawDac();
   if (wantG) { const k = G.findIndex(g => g.name === wantG); if (k >= 0) list.children[k].click(); }
 })();
 </script>
