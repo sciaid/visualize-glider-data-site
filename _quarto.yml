@@ -10,7 +10,14 @@ project:
 
 website:
   title: "ESD glider deployments"
+  # "View source" and "Report an issue" links on every page, and a GitHub icon in the top bar
+  repo-url: https://github.com/sciaid/visualize-glider-data-site
+  repo-actions: [source, issue]
   navbar:
+    right:
+      - icon: github
+        href: https://github.com/sciaid/visualize-glider-data-site
+        aria-label: Source code on GitHub
     left:
       - href: index.qmd
         text: Overview

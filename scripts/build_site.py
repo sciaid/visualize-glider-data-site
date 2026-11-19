@@ -69,8 +69,9 @@ toc: false
 [Open the viewer full screen](../viewer/index.html?d={name}){{target="_blank"}} ·
 [How these plots are made](../methods.qmd)
 
-<small>Distance is summed between consecutive profile positions, not GPS surface fixes, so treat it as
-approximate (it depends on how finely the track is sampled); see [Methods](../methods.qmd#track-distance).</small>
+<small>Distance is an estimate: it is summed between consecutive profile positions, which are dead-reckoned
+or interpolated between GPS surface fixes, and it depends on how finely the track is sampled. It can differ
+from a pilot's figure (e.g. SFMC); see [Methods](../methods.qmd#track-distance).</small>
 """
 
 
@@ -159,7 +160,7 @@ def fmt_source(e):
         return (f"[{e['sourceDataset']}]({e['sourceUrl']}) on the IOOS Glider DAC ERDDAP"
                 + (" (real-time)" if e.get("mode") == "realtime" else "")
                 + (f", last modified {e['modified']}" if e.get("modified") else ""))
-    return "SWFSC ESD processed (L3) file"
+    return "SWFSC ESD processed (L3) file · no ERDDAP dataset yet"
 
 
 def fmt_area(e):
@@ -241,6 +242,122 @@ __BUTTONS__
 </script>
 ```
 """
+
+
+DEPLOYMENTS_TABLE = """```{=html}
+<div class="dep-controls">
+  <input type="search" id="depSearch" placeholder="Search deployments or projects" aria-label="Search">
+  <select id="depRegion" aria-label="Region"><option value="">All regions</option>__REGIONS__</select>
+  <select id="depProject" aria-label="Project"><option value="">All projects</option>__PROJECTS__</select>
+  <select id="depYear" aria-label="Start year"><option value="">All years</option>__YEARS__</select>
+  <label><input type="checkbox" id="depRt"> Real-time only</label>
+  <span id="depCount" class="dep-count"></span>
+</div>
+<div class="table-responsive">
+<table class="table table-sm table-striped table-hover dep-table" id="depTable">
+<thead><tr>
+  <th data-type="text">Deployment</th><th data-type="text">Region</th><th data-type="text">Project</th>
+  <th data-type="text">Start</th><th data-type="text">End</th>
+  <th data-type="num">Profiles</th><th data-type="num">Max depth</th>
+  <th data-type="num" title="Estimate: see Methods">Distance*</th><th data-type="num">Per day*</th><th data-type="text">ERDDAP data</th>
+</tr></thead>
+<tbody>
+__ROWS__
+</tbody></table></div>
+<style>
+  .dep-controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 10px; }
+  .dep-controls input[type=search] { min-width:240px; flex:1 1 240px; }
+  .dep-controls input[type=search], .dep-controls select { padding:4px 8px; border:1px solid #d6d3cc; border-radius:6px; font:inherit; }
+  .dep-count { color:#6c757d; font-size:.9em; margin-left:auto; }
+  .dep-table th { cursor:pointer; white-space:nowrap; user-select:none; }
+  .dep-table th::after { content:" \\2195"; color:#b9b7b1; font-size:.8em; }
+  .dep-table th.asc::after { content:" \\2191"; color:inherit; }
+  .dep-table th.desc::after { content:" \\2193"; color:inherit; }
+  .dep-table { font-size:.9em; }
+  .dep-table td { white-space:nowrap; }
+  .dep-table td:nth-child(2), .dep-table td:nth-child(3), .dep-table td:last-child { white-space:normal; min-width:7em; }
+  .dep-rt { color:#b4501a; font-style:italic; }
+  .dep-none { color:#6c757d; font-style:italic; }
+</style>
+<script>
+(function () {
+  const table = document.getElementById('depTable'), body = table.tBodies[0];
+  const rows = [...body.rows];
+  const q = document.getElementById('depSearch'), reg = document.getElementById('depRegion'),
+        prj = document.getElementById('depProject'), yr = document.getElementById('depYear'),
+        rt = document.getElementById('depRt'), count = document.getElementById('depCount');
+  const params = new URLSearchParams(location.search);          // ?region=, ?project=, ?year=, ?search=, ?rt=1
+  if (params.get('region')) reg.value = params.get('region');
+  if (params.get('project')) prj.value = params.get('project');
+  if (params.get('year')) yr.value = params.get('year');
+  if (params.get('search')) q.value = params.get('search');
+  if (params.get('rt') === '1') rt.checked = true;
+  function filter() {
+    const s = q.value.trim().toLowerCase();
+    let n = 0;
+    rows.forEach(r => {
+      const d = r.dataset;
+      const ok = (!s || r.textContent.toLowerCase().includes(s)) && (!reg.value || d.region === reg.value)
+              && (!prj.value || d.project === prj.value) && (!yr.value || d.year === yr.value)
+              && (!rt.checked || d.mode === 'realtime');
+      r.style.display = ok ? '' : 'none'; if (ok) n++;
+    });
+    count.textContent = `Showing ${n} of ${rows.length} deployments`;
+  }
+  [q, reg, prj, yr, rt].forEach(el => el.addEventListener('input', filter));
+  [...table.tHead.rows[0].cells].forEach((th, c) => th.addEventListener('click', () => {
+    const asc = !th.classList.contains('asc');
+    [...th.parentNode.cells].forEach(x => x.classList.remove('asc', 'desc'));
+    th.classList.add(asc ? 'asc' : 'desc');
+    const num = th.dataset.type === 'num';
+    const key = r => { const cell = r.cells[c], v = cell.dataset.sort ?? cell.textContent.trim();
+                       return num ? (v === '' ? -Infinity : +v) : v.toLowerCase(); };
+    rows.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1); });
+    rows.forEach(r => body.appendChild(r));
+  }));
+  filter();
+})();
+</script>
+```
+"""
+
+
+def write_deployments(index):
+    """deployments.qmd: one table of every deployment with search, region/project/year filters and
+    sortable columns (newest first). ?region=, ?project=, ?year=, ?search= and ?rt=1 preset the filters."""
+    esc = html.escape
+    rows = []
+    for e in sorted(index, key=lambda e: e["start"], reverse=True):
+        km, days = e.get("distanceKm"), e.get("days")
+        rt = e.get("mode") == "realtime"
+        if e.get("sourceUrl"):
+            data = (f'<a href="{esc(e["sourceUrl"])}" target="_blank" rel="noopener">{esc(e["sourceDataset"])}</a>'
+                    + (' <span class="dep-rt">real-time</span>' if rt else ""))
+        else:
+            data = '<span class="dep-none">no ERDDAP dataset yet</span>'
+        rows.append(
+            f'<tr data-region="{esc(e.get("region") or "")}" data-project="{esc(e.get("project") or "")}" '
+            f'data-year="{e["start"][:4]}" data-mode="{esc(e.get("mode") or "")}">'
+            f'<td><a href="deployments/{esc(e["name"])}.html">{esc(e["name"])}</a>'
+            + (' <span class="dep-rt">real-time</span>' if rt else "") + "</td>"
+            f'<td>{esc(e.get("region") or "")}</td><td>{esc(e.get("project") or "")}</td>'
+            f'<td>{esc(e["start"])}</td><td>{esc(e["end"])}</td>'
+            f'<td data-sort="{e["profiles"]}">{e["profiles"]:,}</td>'
+            f'<td data-sort="{e["maxDepth"]:.0f}">{e["maxDepth"]:.0f} m</td>'
+            f'<td data-sort="{"" if km is None else round(km, 1)}">{esc(fmt_distance(e))}</td>'
+            f'<td data-sort="{"" if not (km is not None and days) else round(km / days, 2)}">{esc(fmt_per_day(e))}</td>'
+            f"<td>{data}</td></tr>")
+    opts = lambda vals: "".join(f'<option value="{esc(v)}">{esc(v)}</option>' for v in vals)
+    table = (DEPLOYMENTS_TABLE
+             .replace("__REGIONS__", opts(sorted({e.get("region") for e in index if e.get("region")})))
+             .replace("__PROJECTS__", opts(sorted({e.get("project") for e in index if e.get("project")})))
+             .replace("__YEARS__", opts(sorted({e["start"][:4] for e in index}, reverse=True)))
+             .replace("__ROWS__", "\n".join(rows)))
+    (ROOT / "deployments.qmd").write_text(
+        "---\ntitle: \"Deployments\"\npage-layout: full\n---\n\n"
+        "Click a name for its 3D curtain, depth–time section and T–S diagram; click a column heading to "
+        "sort. \\* Distance and per-day figures are estimates (see [Methods](methods.qmd#track-distance)).\n\n" + table,
+        encoding="utf-8")
 
 
 def write_regionbar(index):
@@ -461,21 +578,7 @@ def main():
             project_note=(f" · **Project:** {e['projectFull']}"
                           if e.get("projectFull") and e["projectFull"] != e.get("project") else ""))
         (ROOT / "deployments" / f"{e['name']}.qmd").write_text(page, encoding="utf-8")
-    groups = OrderedDict()
-    for e in index:
-        groups.setdefault(e.get("region") or "Other", []).append(e)
-    parts = []
-    for region, es in groups.items():
-        rows = "\n".join(
-            f"| [{e['name']}](deployments/{e['name']}.qmd){' · *real-time*' if e.get('mode') == 'realtime' else ''} | {e.get('project', '')} | {e.get('glider', '')} | {e['start']} | {e['end']} "
-            f"| {e['profiles']:,} | {e['maxDepth']:.0f} m | {fmt_distance(e)} | {fmt_per_day(e)} |" for e in es)
-        heading = f"## {region} ({len(es)})\n\n" if len(groups) > 1 else ""
-        parts.append(f"{heading}| Deployment | Project | Glider | Start | End | Profiles | Max depth | Distance (approx.) | Avg. per day |\n"
-                     f"|---|---|---|---|---|---|---|---|---|\n{rows}\n")
-    (ROOT / "deployments.qmd").write_text(
-        "---\ntitle: \"Deployments\"\n---\n\n"
-        f"{len(index)} deployments. Click a name for its 3D curtain, depth-time section and T–S diagram.\n\n"
-        + "\n".join(parts), encoding="utf-8")
+    write_deployments(index)
     write_summary(index)
     write_regionbar(index)
     write_realtime(index, data_dir)
