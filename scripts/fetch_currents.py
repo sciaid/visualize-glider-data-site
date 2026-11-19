@@ -60,6 +60,49 @@ def _f(v):
 # --------------------------------------------------------------------------- #
 # Gliders
 # --------------------------------------------------------------------------- #
+DAC_DAYS = 7          # glider-measured currents shown for the last week
+
+
+def glider_dac(ds, now):
+    """Glider-measured depth-averaged currents (cm/s) for the last DAC_DAYS, one per dive segment,
+    plus a status: "ok", "missing" (no values) or "suspect" (values that cannot be real: u equal to v
+    for nearly every segment, or every value below 1 cm/s). Suspect values are not shown on the map.
+    Positions are lat_uv/lon_uv where filled, otherwise the profile position."""
+    if "dac_u" not in ds.variables or "dac_v" not in ds.variables:
+        return {"status": "missing", "reason": "u and v are not in the real-time dataset"}
+    t, la, lo = _f(ds["time"]), _f(ds["latitude"]), _f(ds["longitude"])
+    u, v = _f(ds["dac_u"]) * 100, _f(ds["dac_v"]) * 100
+    get = lambda n, fb: np.where(np.isfinite(_f(ds[n])), _f(ds[n]), fb) if n in ds.variables else fb
+    tt, lat, lon = get("dac_time_uv", t), get("dac_lat_uv", la), get("dac_lon_uv", lo)
+    pos_from = "lat_uv/lon_uv" if "dac_lat_uv" in ds.variables and np.isfinite(_f(ds["dac_lat_uv"])).any() \
+        else "profile position"
+    ok = np.isfinite(u) & np.isfinite(v) & np.isfinite(tt) & np.isfinite(lat) & np.isfinite(lon) \
+        & (np.hypot(u, v) < 150)
+    if not ok.any():
+        return {"status": "missing", "reason": "no depth-averaged current values in the real-time dataset"}
+    o = np.argsort(tt[ok], kind="stable")
+    tt, lat, lon, u, v = (a[ok][o] for a in (tt, lat, lon, u, v))
+    # one value per dive segment: consecutive profiles often repeat the same segment value
+    new = np.r_[True, (np.diff(u) != 0) | (np.diff(v) != 0)]
+    tt, lat, lon, u, v = (a[new] for a in (tt, lat, lon, u, v))
+    same = float(np.mean(u == v))
+    speed = np.hypot(u, v)
+    out = {"positions": pos_from, "n": int(u.size)}
+    if same > 0.9:
+        out.update(status="suspect", reason=f"u equals v in {same:.0%} of segments")
+    elif np.percentile(speed, 95) < 1:
+        out.update(status="suspect", reason="every value is below 1 cm/s")
+    else:
+        out["status"] = "ok"
+    recent = tt >= now - DAC_DAYS * 86400
+    if out["status"] == "ok" and recent.any():
+        r = lambda a, k: [round(float(x), k) for x in a[recent]]
+        out.update(t=[int(x) for x in tt[recent]], lat=r(lat, 4), lon=r(lon, 4), u=r(u, 1), v=r(v, 1))
+    elif out["status"] == "ok":
+        out.update(status="missing", reason=f"no values in the last {DAC_DAYS} days")
+    return out
+
+
 def gliders(cache):
     """Active real-time gliders from fetch_erddap.py grids."""
     out = []
@@ -89,7 +132,8 @@ def gliders(cache):
                         "lat": round(float(la[-1]), 5), "lon": round(float(lo[-1]), 5), "time": int(t[-1]),
                         "diveDepth": dive,
                         "track": {"t": [int(x) for x in t[::step]], "lat": [round(float(x), 4) for x in la[::step]],
-                                  "lon": [round(float(x), 4) for x in lo[::step]]}})
+                                  "lon": [round(float(x), 4) for x in lo[::step]]},
+                        "dac": glider_dac(ds, now)})
     return out
 
 
@@ -349,6 +393,11 @@ def main(argv=None):
     with tempfile.TemporaryDirectory() as tmp:
         for g in gs:
             print(f"  {g['name']}: {g['lat']:.3f}, {g['lon']:.3f}, dive depth {g['diveDepth']} m")
+            d = g["dac"]
+            print(f"    glider-measured currents: {d['status']}"
+                  + (f" ({d['reason']})" if d.get("reason") else "")
+                  + (f", {len(d['u'])} segments in the last {DAC_DAYS} days, latest "
+                     f"{np.hypot(d['u'][-1], d['v'][-1]):.0f} cm/s" if d.get("u") else ""))
             if have_cm:
                 try:
                     g["model"] = model_currents(g, tmp)

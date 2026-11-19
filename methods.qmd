@@ -147,6 +147,16 @@ Scripps Institution of Oceanography, served by NOAA CoastWatch ERDDAP), averaged
 2.4 m of the ocean and reaches a limited distance offshore; there is no HF radar near the
 Antarctic Peninsula.
 
+**Measured by the glider.** Each real-time dataset on the IOOS Glider DAC carries the glider's
+own depth-averaged current (`u`, `v`): the drift between the position the glider predicts from
+its flight model and the GPS fix when it surfaces, divided by the time underwater. It is one
+value per dive, averaged over the dive's depth and time, so compare it with the models' mean
+down to the dive depth (in the glider pop-up), not with the 0–100 m mean. Being derived from the
+flight model, it carries that model's errors. The map shows one purple arrow per dive for the
+last 7 days, at `lat_uv`/`lon_uv` where those are filled and at the profile position otherwise.
+Values that cannot be real are left off and the panel says why: `u` equal to `v` for nearly
+every dive, or every value below 1 cm/s.
+
 Arrows are drawn every 2nd model cell (about 1/6°); colour and length show speed.
 
 ## Regions and projects

@@ -54,10 +54,15 @@ KEEP_ATTRS = ["project", "institution", "creator_name", "summary", "title", "gli
               "platform_type", "wmo_id", "date_modified", "license", "acknowledgment"]
 DZ, MAX_DEPTH = 5.0, 1200.0
 # Real-time grids also keep the individual samples (as transmitted) of these variables, so the
-# viewer can plot them as points. Bump FORMAT when the grid file layout changes: grids written
-# with an older FORMAT are downloaded again on the next run.
+# viewer can plot them as points. Bump FORMAT (below) when the grid file layout changes: grids
+# written with an older FORMAT are downloaded again on the next run.
 SAMPLE_PLOT_VARS = ["temperature", "salinity", "chlorophyll", "oxygen_concentration", "cdom", "backscatter_700"]
-FORMAT = 3
+# Glider-measured depth-averaged current (one value per dive segment), kept for real-time grids
+# as dac_<name> on the time dimension: the real-time map shows it beside the current models.
+DAC_VARS = ["u", "v", "time_uv", "lat_uv", "lon_uv"]
+# Grid file layout version, per data mode (only real-time grids hold samples and dac_* variables,
+# so a change to those does not force every delayed grid to download again).
+FORMAT = {"realtime": 4, "delayed": 3}
 BATHY_KEYS = ("gebco", "etopo", "bathy")
 ID_RE = re.compile(r"^(?P<base>.+?-\d{8})T\d{4}(?P<delayed>-delayed)?$")
 
@@ -173,12 +178,14 @@ def grid_dac(path, variables, dz=DZ, max_depth=MAX_DEPTH):
         if name in variables and name in ds.variables:
             smp[name] = _f(ds[name])[good]
     out["samples"] = smp
-    for name in ("time", "latitude", "longitude"):           # one value per profile
+    per_profile = [n for n in ("time", "latitude", "longitude") + tuple(DAC_VARS) if n in ds.variables]
+    for name in per_profile:                                   # one value per profile
         v = _f(ds[name])[good]
         f = np.isfinite(v)
         s = np.bincount(inv[f], weights=v[f], minlength=profiles.size)
         n = np.bincount(inv[f], minlength=profiles.size)
-        out[name] = np.where(n > 0, s / np.maximum(n, 1), np.nan)
+        out[name if name in ("time", "latitude", "longitude") else "dac_" + name] = \
+            np.where(n > 0, s / np.maximum(n, 1), np.nan)
     for name in variables:
         if name not in ds.variables:
             continue
@@ -237,6 +244,13 @@ def write_grid(g, info, row, url, path, samples=False):
             v = ds.createVariable(name, "f4", ("depth", "time"), fill_value=np.float32(np.nan), zlib=True)
             v[:] = g[name].astype("f4")
             v.units = info["units"].get(name, "kg m-3" if name == "potential_density" else "")
+    for name in DAC_VARS:
+        if "dac_" + name in g:
+            v = ds.createVariable("dac_" + name, "f8", ("time",), fill_value=np.nan)
+            v[:] = g["dac_" + name]
+            v.units = info["units"].get(name, "")
+            v.comment = (f"Glider-measured depth-averaged current variable '{name}' from the source dataset, "
+                         "one value per profile")
     if samples and "samples" in g:
         write_samples(ds, g["samples"], info)
     ds.close()
@@ -334,7 +348,7 @@ def main(argv=None):
             continue
         prev = manifest.get(dep, {})
         changed = (a.force or prev.get("datasetID") != row["datasetID"]
-                   or prev.get("maxTime") != row["maxTime"] or prev.get("format") != FORMAT
+                   or prev.get("maxTime") != row["maxTime"] or prev.get("format") != FORMAT[row["mode"]]
                    or not (out_dir / prev.get("file", "-")).exists())
         print(f"  {dep:28s} {row['mode']:8s} {row['datasetID']:40s} {'download' if changed else 'up to date'}")
         if changed:
@@ -357,6 +371,8 @@ def main(argv=None):
         try:
             info = dataset_info(did)
             want = BASE_VARS + [v for v in SAMPLE_VARS if v in info["variables"]]
+            if row["mode"] == "realtime":
+                want += [v for v in DAC_VARS if v in info["variables"]]
             print(f"\nDownloading {did} ({len(want)} variables) ...")
             missing = [v for v in OPTIONAL_VARS if v not in info["variables"]]
             if missing:
@@ -378,7 +394,7 @@ def main(argv=None):
                 p.unlink()
         manifest[dep] = {"datasetID": did, "mode": row["mode"], "maxTime": row["maxTime"],
                          "date_modified": info["globals"].get("date_modified", ""), "file": name,
-                         "format": FORMAT}
+                         "format": FORMAT[row["mode"]]}
         manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
         done += 1
         print(f"  {g['profile'].size} profiles x {g['depth'].size} bins -> {name}")
