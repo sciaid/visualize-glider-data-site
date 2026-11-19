@@ -56,6 +56,15 @@ jobs:
           print(f"errors={len(s.get('errors', []))}")
           EOF
 
+      # Currents around the gliders that are out now, for the real-time map. Model currents need the
+      # repository secrets COPERNICUSMARINE_SERVICE_USERNAME / _PASSWORD (free Copernicus Marine account);
+      # without them only HF radar is shown. Never fails the build.
+      - name: Ocean currents for the real-time map
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/fetch_currents.py .erddap-cache currents || echo "currents step failed; map shows gliders only"
+
       - name: Build site data (ERDDAP deployments are built here, not committed)
         run: python scripts/build_site.py .erddap-cache bathymetry --erddap-status .erddap-cache/ERDDAP/status.json
 
