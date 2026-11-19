@@ -186,6 +186,90 @@ def model_block(g, times, lat, lon, depth, u, v, bottom, today):
 
 
 # --------------------------------------------------------------------------- #
+# NOAA WCOFS (West Coast Operational Forecast System)
+# --------------------------------------------------------------------------- #
+WCOFS_TDS = "https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/WCOFS/MODELS"
+WCOFS_NAME = "NOAA West Coast Operational Forecast System (WCOFS, 4 km, daily means of 3-hourly output)"
+WCOFS_URL = "https://tidesandcurrents.noaa.gov/ofs/wcofs/wcofs.html"
+WCOFS_BOX = (18.42, 55.78, -145.38, -112.10)
+WCOFS_STRIDE = 2           # every 2nd 0.04 deg cell (~8 km); the page shows every 2nd of those
+
+
+def in_wcofs(g):
+    return WCOFS_BOX[0] + 1 <= g["lat"] <= WCOFS_BOX[1] - 1 and WCOFS_BOX[2] + 1 <= g["lon"] <= WCOFS_BOX[3] - 0.2
+
+
+def _wcofs_url(run, kind, hour):
+    d = run.strftime("%Y/%m/%d")
+    return f"{WCOFS_TDS}/{d}/wcofs.t03z.{run:%Y%m%d}.regulargrid.{kind}{hour:03d}.nc"
+
+
+def wcofs_latest_run(now=None):
+    """The newest 03Z run whose last forecast file (f072) is on the server: today's or yesterday's."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    for back in range(0, 3):
+        run = dt.datetime(now.year, now.month, now.day, 3, tzinfo=dt.timezone.utc) - dt.timedelta(days=back)
+        if run > now:
+            continue
+        try:
+            with netCDF4.Dataset(_wcofs_url(run, "f", 72)):
+                return run
+        except OSError:
+            continue
+    raise RuntimeError("no complete WCOFS run on the server for the last 2 days")
+
+
+def wcofs_currents(g):
+    """Daily-mean WCOFS currents around the glider, yesterday to +3 days, on every z-level down to the
+    glider's dive depth. Output in the same layout as the Copernicus block."""
+    from concurrent.futures import ThreadPoolExecutor
+    run = wcofs_latest_run()
+    lat0, lat1, lon0, lon1 = box(g)
+    bottom = max(LAYER_DEPTH, g["diveDepth"] or LAYER_DEPTH)
+    with netCDF4.Dataset(_wcofs_url(run, "f", 3)) as ds:
+        depth = _f(ds["Depth"])
+        lat = _f(ds["Latitude"][:, 0]) if ds["Latitude"].ndim == 2 else _f(ds["Latitude"])
+        lon = _f(ds["Longitude"][0, :]) if ds["Longitude"].ndim == 2 else _f(ds["Longitude"])
+        t_units = ds["time"].units
+    nz = int(np.searchsorted(depth, bottom, side="left")) + 1          # levels down to (and including) bottom
+    nz = min(nz, depth.size)
+    jj = np.where((lat >= lat0) & (lat <= lat1))[0]; ii = np.where((lon >= lon0) & (lon <= lon1))[0]
+    j0, j1, i0, i1 = jj.min(), jj.max() + 1, ii.min(), ii.max() + 1
+    sl = (0, slice(0, nz), slice(j0, j1, WCOFS_STRIDE), slice(i0, i1, WCOFS_STRIDE))
+    steps = [("n", h) for h in range(3, 25, 3)] + [("f", h) for h in range(3, 73, 3)]
+
+    def get(step):
+        kind, h = step
+        for attempt in range(3):
+            try:
+                with netCDF4.Dataset(_wcofs_url(run, kind, h)) as ds:
+                    t = netCDF4.num2date(ds["time"][:], t_units, only_use_cftime_datetimes=False,
+                                         only_use_python_datetimes=True)[0]
+                    u = np.ma.filled(ds["u_eastward"][sl].astype("f8"), np.nan)
+                    v = np.ma.filled(ds["v_northward"][sl].astype("f8"), np.nan)
+                return t.replace(tzinfo=dt.timezone.utc), u, v
+            except OSError:
+                if attempt == 2:
+                    return None
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        got = [x for x in ex.map(get, steps) if x is not None]
+    if not got:
+        raise RuntimeError("no WCOFS files could be read")
+    by_day = {}
+    for t, u, v in got:
+        by_day.setdefault(t.date(), []).append((u, v))
+    days = sorted(d for d, xs in by_day.items() if len(xs) >= 6)      # at least 6 of 8 three-hourly steps
+    times = [dt.datetime(d.year, d.month, d.day) for d in days]
+    U = np.stack([np.nanmean([x[0] for x in by_day[d]], axis=0) for d in days])
+    V = np.stack([np.nanmean([x[1] for x in by_day[d]], axis=0) for d in days])
+    out = model_block(g, times, lat[j0:j1:WCOFS_STRIDE], lon[i0:i1:WCOFS_STRIDE], depth[:nz], U, V, bottom,
+                      str(dt.datetime.now(dt.timezone.utc).date()))
+    out.update({"source": WCOFS_NAME, "dataset": f"WCOFS {run:%Y-%m-%d} 03Z run", "doi": WCOFS_URL,
+                "run": f"{run:%Y-%m-%d %H:%M} UTC", "steps": len(got)})
+    return out
+
+
+# --------------------------------------------------------------------------- #
 # HF radar (observed)
 # --------------------------------------------------------------------------- #
 def in_hfr(g):
@@ -233,6 +317,21 @@ def hfr_currents(g, workdir):
 
 
 # --------------------------------------------------------------------------- #
+def log_at_glider(m):
+    """Print the model current at the glider each day: surface, 0-100 m and 0-dive depth (for checking)."""
+    e = np.array(m["edges"])
+    for d in m["days"]:
+        u, v = np.array(d["colU"], float), np.array(d["colV"], float)
+
+        def mean(D):
+            w = np.clip(np.minimum(e[1:], D) - np.minimum(e[:-1], D), 0, None) if D > 0 else np.eye(1, u.size)[0]
+            ok = np.isfinite(u) & np.isfinite(v) & (w > 0)
+            return (np.sum(w[ok] * u[ok]) / w[ok].sum(), np.sum(w[ok] * v[ok]) / w[ok].sum()) if ok.any() else (np.nan, np.nan)
+        txt = "  ".join(f"{lab} {np.hypot(*mean(D)):4.1f} cm/s @{(np.degrees(np.arctan2(*mean(D))) % 360):3.0f}"
+                        for lab, D in (("sfc", 0), ("0-100", 100), (f"0-{m['maxDepth']:.0f}", m["maxDepth"])))
+        print(f"      {d['date']}: {txt}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("cache", help="fetch_erddap.py output folder (holds ERDDAP/*_erddap-realtime-5m.nc)")
@@ -255,19 +354,19 @@ def main(argv=None):
                     g["model"] = model_currents(g, tmp)
                     m = g["model"]
                     print(f"    model: {len(m['days'])} days, {len(m['levels'])} levels")
-                    for d in m["days"]:                  # at the glider: surface, 0-100 m, 0-dive
-                        u, v = np.array(d["colU"], float), np.array(d["colV"], float)
-                        e = np.array(m["edges"])
-                        def mean(D):
-                            w = np.clip(np.minimum(e[1:], D) - np.minimum(e[:-1], D), 0, None) if D > 0 else np.eye(1, u.size)[0]
-                            ok = np.isfinite(u) & np.isfinite(v) & (w > 0)
-                            return (np.sum(w[ok] * u[ok]) / w[ok].sum(), np.sum(w[ok] * v[ok]) / w[ok].sum()) if ok.any() else (np.nan, np.nan)
-                        txt = "  ".join(f"{lab} {np.hypot(*mean(D)):4.1f} cm/s @{(np.degrees(np.arctan2(*mean(D))) % 360):3.0f}"
-                                        for lab, D in (("sfc", 0), ("0-100", 100), (f"0-{m['maxDepth']:.0f}", m["maxDepth"])))
-                        print(f"      {d['date']}: {txt}")
+                    log_at_glider(m)
                 except Exception as exc:
                     traceback.print_exc()
                     result["notes"].append(f"{g['name']}: model currents failed ({type(exc).__name__}).")
+            if in_wcofs(g):
+                try:
+                    g["wcofs"] = wcofs_currents(g)
+                    m = g["wcofs"]
+                    print(f"    WCOFS: run {m['run']}, {m['steps']} files, {len(m['days'])} days, {len(m['levels'])} levels")
+                    log_at_glider(m)
+                except Exception as exc:
+                    traceback.print_exc()
+                    result["notes"].append(f"{g['name']}: WCOFS currents failed ({type(exc).__name__}).")
             if in_hfr(g):
                 try:
                     g["hfr"] = hfr_currents(g, tmp)

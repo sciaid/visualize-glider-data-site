@@ -47,6 +47,10 @@ HTML = r"""<!DOCTYPE html>
 
   <h2>Model current (forecast)</h2>
   <label class="line"><input type="checkbox" id="mOn" checked> Show</label>
+  <div id="modelPick" style="display:none">
+    <label class="line"><input type="radio" name="mdl" value="model" checked> Copernicus (global, 5 days)</label>
+    <label class="line"><input type="radio" name="mdl" value="wcofs"> NOAA WCOFS (West Coast, 3 days)</label>
+  </div>
   <div>Day: <span class="val" id="dayLabel"></span></div>
   <input type="range" id="day" min="0" max="0" value="0">
   <div>Mean from the surface to <span class="val" id="depthLabel"></span></div>
@@ -98,13 +102,22 @@ HTML = r"""<!DOCTYPE html>
   }
 
   // ---- day and depth controls
-  const models = G.filter(g => g.model);
-  const dates = models.length ? models[0].model.days.map(d => d.date) : [];
-  const today = models.length ? models[0].model.today : new Date().toISOString().slice(0, 10);
+  // Two model sources: Copernicus (g.model, default, everywhere) and NOAA WCOFS (g.wcofs, West Coast).
+  const KEYS = { model: 'Copernicus', wcofs: 'WCOFS' };
+  let KEY = 'model';
+  const models = G.filter(g => g.model || g.wcofs);
+  const anyM = k => G.find(g => g[k]);
+  const allDays = [...new Set(G.flatMap(g => ['model', 'wcofs'].flatMap(k => g[k] ? g[k].days.map(d => d.date) : [])))].sort();
+  const dates = allDays;
+  const today = anyM('model') ? anyM('model').model.today
+              : anyM('wcofs') ? anyM('wcofs').wcofs.today : new Date().toISOString().slice(0, 10);
+  const dayOf = (m, i) => m.days.find(d => d.date === dates[i]);
+  if (anyM('wcofs')) document.getElementById('modelPick').style.display = '';
+  document.querySelectorAll('input[name=mdl]').forEach(r => r.onchange = () => { KEY = r.value; drawModel(); });
   const dayEl = document.getElementById('day'), depthEl = document.getElementById('depth');
   dayEl.max = Math.max(0, dates.length - 1);
   dayEl.value = Math.max(0, dates.indexOf(today));
-  const maxDepth = Math.max(100, ...models.map(g => g.model.maxDepth));
+  const maxDepth = Math.max(100, ...G.flatMap(g => ['model', 'wcofs'].filter(k => g[k]).map(k => g[k].maxDepth)));
   depthEl.max = maxDepth; depthEl.value = Math.min(100, maxDepth);
   const dayText = i => {
     if (!dates.length) return 'no model data';
@@ -144,9 +157,11 @@ HTML = r"""<!DOCTYPE html>
   function drawModel() {
     arrowsModel.clearLayers();
     if (!document.getElementById('mOn').checked) return;
-    const di = +dayEl.value, D = +depthEl.value;
-    models.forEach(g => {
-      const m = g.model, day = m.days[Math.min(di, m.days.length - 1)], gr = m.grid;
+    const di = +dayEl.value, D = +depthEl.value, missing = [];
+    G.forEach(g => {
+      const m = g[KEY]; if (!m) { if (g[KEY === 'wcofs' ? 'model' : 'wcofs']) missing.push(`${g.name}: outside ${KEYS[KEY]}`); return; }
+      const day = dayOf(m, di); if (!day) { missing.push(`${g.name}: no ${KEYS[KEY]} data for this day`); return; }
+      const gr = m.grid;
       const Dg = Math.min(D, m.maxDepth), w = weights(m, Dg);
       for (let r = 0; r < gr.ny; r++) for (let q = 0; q < gr.nx; q++) {
         const c = r * gr.nx + q;
@@ -156,8 +171,9 @@ HTML = r"""<!DOCTYPE html>
     });
     document.getElementById('dayLabel').textContent = dayText(di);
     document.getElementById('depthLabel').textContent = depthText(D);
-    const capped = models.filter(g => D > g.model.maxDepth).map(g => `${g.name} (${g.model.maxDepth} m)`);
-    document.getElementById('depthNote').textContent = capped.length ? `Shown to each glider's dive depth: ${capped.join(', ')}.` : '';
+    const capped = G.filter(g => g[KEY] && D > g[KEY].maxDepth).map(g => `${g.name} (${g[KEY].maxDepth} m)`);
+    document.getElementById('depthNote').textContent = [capped.length ? `Shown to each glider's dive depth: ${capped.join(', ')}.` : '',
+      missing.length ? missing.join('; ') + '.' : ''].filter(Boolean).join(' ');
   }
 
   function drawHfr() {
@@ -203,14 +219,19 @@ HTML = r"""<!DOCTYPE html>
   function popup(g) {
     let rows = `<tr><td>Last fix</td><td>${fmtT(g.time)}</td></tr><tr><td>Position</td><td>${g.lat.toFixed(4)}, ${g.lon.toFixed(4)}</td></tr>` +
                (g.diveDepth ? `<tr><td>Dive depth</td><td>~${g.diveDepth} m (recent dives)</td></tr>` : '');
-    if (g.model) {
-      const m = g.model, di = Math.min(+dayEl.value, m.days.length - 1), day = m.days[di], D = Math.min(+depthEl.value, m.maxDepth);
-      const col = D2 => meanCol(day.colU, day.colV, weights(m, D2), D2);
-      rows += `<tr><td colspan="2" style="padding-top:6px;color:inherit"><b>Model, ${esc(dayText(di))}</b></td></tr>` +
+    const di = +dayEl.value;
+    if (g.model || g.wcofs) rows += `<tr><td colspan="2" style="padding-top:6px;color:inherit"><b>Model, ${esc(dayText(di))}</b></td></tr>`;
+    // selected model first, then the other one for comparison
+    [KEY, KEY === 'model' ? 'wcofs' : 'model'].forEach(k => {
+      const m = g[k]; if (!m) return;
+      const day = dayOf(m, di);
+      if (!day) { rows += `<tr><td>${KEYS[k]}</td><td>no data for this day</td></tr>`; return; }
+      const D = Math.min(+depthEl.value, m.maxDepth), col = D2 => meanCol(day.colU, day.colV, weights(m, D2), D2);
+      rows += `<tr><td colspan="2" style="color:#52514e;padding-top:3px">${KEYS[k]}</td></tr>` +
               `<tr><td>Surface</td><td>${fmtCur(col(0))}</td></tr>` +
               `<tr><td>0–${D} m</td><td>${fmtCur(col(D))}</td></tr>` +
               (g.diveDepth ? `<tr><td>0–${m.maxDepth} m (dive)</td><td>${fmtCur(col(m.maxDepth))}</td></tr>` : '');
-    }
+    });
     if (g.hfr) {
       const gr = g.hfr.grid, r = Math.round((g.lat - gr.lat0) / gr.dlat), q = Math.round((g.lon - gr.lon0) / gr.dlon);
       const c = r >= 0 && r < gr.ny && q >= 0 && q < gr.nx ? r * gr.nx + q : -1;
@@ -234,7 +255,8 @@ HTML = r"""<!DOCTYPE html>
 
   // ---- sources
   const src = [];
-  if (models.length) src.push(`Model: <a href="${models[0].model.doi}" target="_blank">${esc(models[0].model.source)}</a>, run of ${esc(models[0].model.today)}.`);
+  if (anyM('model')) { const m = anyM('model').model; src.push(`Model: <a href="${m.doi}" target="_blank">${esc(m.source)}</a>, run of ${esc(m.today)}.`); }
+  if (anyM('wcofs')) { const m = anyM('wcofs').wcofs; src.push(`Model: <a href="${m.doi}" target="_blank">${esc(m.source)}</a>, run of ${esc(m.run)}.`); }
   if (G.some(g => g.hfr)) src.push(`Observed: ${esc(G.find(g => g.hfr).hfr.source)}.`);
   if (C.made) src.push(`Updated ${esc(C.made)} by the daily site build.`);
   document.getElementById('sources').innerHTML = src.join('<br>');
