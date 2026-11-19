@@ -253,7 +253,18 @@ def main(argv=None):
             if have_cm:
                 try:
                     g["model"] = model_currents(g, tmp)
-                    print(f"    model: {len(g['model']['days'])} days, {len(g['model']['levels'])} levels")
+                    m = g["model"]
+                    print(f"    model: {len(m['days'])} days, {len(m['levels'])} levels")
+                    for d in m["days"]:                  # at the glider: surface, 0-100 m, 0-dive
+                        u, v = np.array(d["colU"], float), np.array(d["colV"], float)
+                        e = np.array(m["edges"])
+                        def mean(D):
+                            w = np.clip(np.minimum(e[1:], D) - np.minimum(e[:-1], D), 0, None) if D > 0 else np.eye(1, u.size)[0]
+                            ok = np.isfinite(u) & np.isfinite(v) & (w > 0)
+                            return (np.sum(w[ok] * u[ok]) / w[ok].sum(), np.sum(w[ok] * v[ok]) / w[ok].sum()) if ok.any() else (np.nan, np.nan)
+                        txt = "  ".join(f"{lab} {np.hypot(*mean(D)):4.1f} cm/s @{(np.degrees(np.arctan2(*mean(D))) % 360):3.0f}"
+                                        for lab, D in (("sfc", 0), ("0-100", 100), (f"0-{m['maxDepth']:.0f}", m["maxDepth"])))
+                        print(f"      {d['date']}: {txt}")
                 except Exception as exc:
                     traceback.print_exc()
                     result["notes"].append(f"{g['name']}: model currents failed ({type(exc).__name__}).")
