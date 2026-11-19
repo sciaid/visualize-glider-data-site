@@ -133,6 +133,14 @@ dive, weighted by the time spent at each depth, so the mean down to the dive dep
 each glider's pop-up, is the better guide to drift; the 0–100 m mean shows where the strong
 near-surface flow is. Daily means remove most of the tidal flow.
 
+**Second model for the West Coast.** For gliders off the US West Coast the map can also show
+NOAA's West Coast Operational Forecast System (WCOFS; a ROMS model, about 4 km), from the
+regular-grid output on NOAA CO-OPS' THREDDS server: the newest 03Z run's nowcast (previous 24 h)
+and 72-hour forecast, 3-hourly on fixed depth levels, averaged to daily means (days with at least
+6 of 8 time steps) so it can be compared with the Copernicus layer. Copernicus is the default
+because it covers every region; switch models in the map panel. The glider pop-up lists both
+models, so you can see where the two forecasts disagree.
+
 **Observed.** Surface currents from the US West Coast HF radar network (6 km grid; CORDC,
 Scripps Institution of Oceanography, served by NOAA CoastWatch ERDDAP), averaged over the last
 24 hours, where a glider is inside the radar coverage. HF radar measures roughly the top
