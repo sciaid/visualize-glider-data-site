@@ -41,7 +41,10 @@ MODEL_DATASET = "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m"      # daily mean uo
 MODEL_NAME = "Copernicus Marine global analysis and forecast (1/12°, daily means)"
 MODEL_DOI = "https://doi.org/10.48670/moi-00016"
 HFR_ERDDAP = "https://coastwatch.pfeg.noaa.gov/erddap/griddap"
-HFR_DATASET = "ucsdHfrW6_Lon0360"                                # US West Coast, hourly, 6 km
+# US West Coast, hourly, 6 km. CoastWatch serves it under two IDs (longitudes -180..180 and 0..360)
+# and either can be briefly unavailable, so both are tried, with retries.
+HFR_DATASETS = [("ucsdHfrW6", 0.0), ("ucsdHfrW6_Lon0360", 360.0)]
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) visualize-glider-data-site (+https://github.com/sciaid/visualize-glider-data-site)"
 HFR_BOX = (30.25, 49.99, -130.36, -115.80)                       # lat0, lat1, lon0, lon1
 HALF_BOX_DEG = 1.25        # map box: +/- this many degrees of latitude around the glider
 LAYER_DEPTH = 100.0        # the 0-100 m mean shown on the map
@@ -190,19 +193,33 @@ def in_hfr(g):
 
 
 def hfr_currents(g, workdir):
+    import time
     lat0, lat1, lon0, lon1 = box(g)
     lat0, lat1 = max(lat0, HFR_BOX[0]), min(lat1, HFR_BOX[1])
-    lon0, lon1 = max(lon0, HFR_BOX[2]) + 360, min(lon1, HFR_BOX[3]) + 360
-    sel = f"[(last-23):1:(last)][({lat0:.3f}):1:({lat1:.3f})][({lon0:.3f}):1:({lon1:.3f})]"
-    url = f"{HFR_ERDDAP}/{HFR_DATASET}.nc?water_u{sel},water_v{sel}"
-    url = url.replace("(last-23)", "last-23").replace("(last)", "last")
-    req = urllib.request.Request(url, headers={"User-Agent": "visualize-glider-data-site"})
+    lon0, lon1 = max(lon0, HFR_BOX[2]), min(lon1, HFR_BOX[3])
     path = Path(workdir) / f"{g['name']}_hfr.nc"
-    with urllib.request.urlopen(req, timeout=300) as r:
-        path.write_bytes(r.read())
+    errors = []
+    for attempt in range(3):
+        for did, shift in HFR_DATASETS:
+            sel = f"[last-23:1:last][({lat0:.3f}):1:({lat1:.3f})][({lon0 + shift:.3f}):1:({lon1 + shift:.3f})]"
+            url = f"{HFR_ERDDAP}/{did}.nc?water_u{sel},water_v{sel}"
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+                with urllib.request.urlopen(req, timeout=300) as r:
+                    path.write_bytes(r.read())
+                break
+            except Exception as exc:
+                errors.append(f"{did}: {exc}")
+        else:
+            time.sleep(20 * (attempt + 1))
+            continue
+        break
+    else:
+        raise RuntimeError("; ".join(errors[-2:]))
     with netCDF4.Dataset(path) as ds:
         tv = ds["time"]; t = _f(tv)
-        lat, lon = _f(ds["latitude"]), _f(ds["longitude"]) - 360
+        lat, lon = _f(ds["latitude"]), _f(ds["longitude"])
+        lon = np.where(lon > 180, lon - 360, lon)
         u, v = _f(ds["water_u"]), _f(ds["water_v"])             # time, lat, lon
     if lat[0] > lat[-1]:
         lat, u, v = lat[::-1], u[:, ::-1], v[:, ::-1]
@@ -211,7 +228,7 @@ def hfr_currents(g, workdir):
     mv = np.where(n >= 12, np.nanmean(v, axis=0), np.nan)
     iso = lambda s: dt.datetime.fromtimestamp(float(s), dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     return {"source": "HF radar, US West Coast 6 km (CORDC/Scripps via NOAA CoastWatch ERDDAP)",
-            "dataset": HFR_DATASET, "start": iso(np.nanmin(t)), "end": iso(np.nanmax(t)),
+            "dataset": "ucsdHfrW6", "start": iso(np.nanmin(t)), "end": iso(np.nanmax(t)),
             "grid": grid_block(lat, lon, mu, mv, step=3)}   # ~18 km, like the model arrows
 
 
