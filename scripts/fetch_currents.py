@@ -31,6 +31,9 @@ import os
 import sys
 import tempfile
 import traceback
+import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 import urllib.request
 from pathlib import Path
 
@@ -376,6 +379,23 @@ def log_at_glider(m):
         print(f"      {d['date']}: {txt}")
 
 
+def isolated(fn, *args, tries=2):
+    """fn(*args) in a separate process. The Copernicus and WCOFS readers occasionally crash the
+    Python process (segmentation fault inside the netCDF/HDF5 libraries); in a child process
+    that loses only this one source, and it is tried once more."""
+    for k in range(tries):
+        with ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn")) as ex:
+            try:
+                return ex.submit(fn, *args).result()
+            except BrokenProcessPool:
+                print(f"    {fn.__name__} crashed (attempt {k + 1} of {tries})", flush=True)
+    raise RuntimeError(f"{fn.__name__} crashed {tries} times")
+
+
+def write_result(out, result):
+    (out / "currents.json").write_text(json.dumps(result, separators=(",", ":")), encoding="utf-8")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("cache", help="fetch_erddap.py output folder (holds ERDDAP/*_erddap-realtime-5m.nc)")
@@ -386,6 +406,9 @@ def main(argv=None):
     result = {"made": made, "gliders": [], "notes": []}
     gs = gliders(a.cache)
     print(f"{len(gs)} active real-time gliders")
+    # the gliders, their tracks and their own measured currents go out first, so the map still
+    # lists them if every outside source fails
+    write_result(out, dict(result, gliders=gs))
     have_cm = bool(os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME") and os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD"))
     if gs and not have_cm:
         result["notes"].append("Model currents not available: Copernicus Marine credentials are not set.")
@@ -400,7 +423,7 @@ def main(argv=None):
                      f"{np.hypot(d['u'][-1], d['v'][-1]):.0f} cm/s" if d.get("u") else ""))
             if have_cm:
                 try:
-                    g["model"] = model_currents(g, tmp)
+                    g["model"] = isolated(model_currents, g, tmp)
                     m = g["model"]
                     print(f"    model: {len(m['days'])} days, {len(m['levels'])} levels")
                     log_at_glider(m)
@@ -409,7 +432,7 @@ def main(argv=None):
                     result["notes"].append(f"{g['name']}: model currents failed ({type(exc).__name__}).")
             if in_wcofs(g):
                 try:
-                    g["wcofs"] = wcofs_currents(g)
+                    g["wcofs"] = isolated(wcofs_currents, g)
                     m = g["wcofs"]
                     print(f"    WCOFS: run {m['run']}, {m['steps']} files, {len(m['days'])} days, {len(m['levels'])} levels")
                     log_at_glider(m)
@@ -418,13 +441,14 @@ def main(argv=None):
                     result["notes"].append(f"{g['name']}: WCOFS currents failed ({type(exc).__name__}).")
             if in_hfr(g):
                 try:
-                    g["hfr"] = hfr_currents(g, tmp)
+                    g["hfr"] = isolated(hfr_currents, g, tmp)
                     print(f"    HF radar: {g['hfr']['start']} to {g['hfr']['end']}")
                 except Exception as exc:
                     traceback.print_exc()
                     result["notes"].append(f"{g['name']}: HF radar failed ({type(exc).__name__}).")
             result["gliders"].append(g)
-    (out / "currents.json").write_text(json.dumps(result, separators=(",", ":")), encoding="utf-8")
+            write_result(out, dict(result, gliders=result["gliders"] + gs[len(result["gliders"]):]))
+    write_result(out, result)
     print(f"Wrote {out / 'currents.json'} ({(out / 'currents.json').stat().st_size / 1e3:.0f} kB)")
     return 0
 
