@@ -22,7 +22,8 @@ profile's samples are averaged into 5 m depth bins. For a deployment available b
 (calanus-20260824) this reproduced the L3 file to within 0.001 °C in every bin. Delayed-mode
 data are used when published. Until then, real-time data are shown and labelled
 **real-time (provisional)**: they are thinned, not quality-controlled and may have gaps. Each
-deployment page and the Deployments table link to its ERDDAP dataset (deployments shown from local L3 files say "no ERDDAP dataset yet"). The site checks ERDDAP once a day and rebuilds
+deployment page and the Deployments table link to its ERDDAP dataset (deployments shown from local L3 files say "no ERDDAP dataset yet"). The site checks ERDDAP three times a day (scheduled for about 5:30 am, 11:30 am and 5:30 pm
+Pacific, though GitHub often starts these runs late) and rebuilds
 with any new or updated datasets; the date of the last check is shown on the home and
 real-time pages. Deployments published from local L3 files are never replaced by their ERDDAP
 versions unless listed in `erddap.json` in the site's repository.
@@ -120,7 +121,7 @@ speed. GEBCO is partly interpolated away from survey lines and is not for naviga
 ## Ocean currents on the real-time map
 
 The [Real-time](realtime.qmd) page maps the gliders that are out now (last data within 14 days)
-with ocean currents around each one, refreshed by the daily site build.
+with ocean currents around each one, refreshed by each site build.
 
 **Model forecast.** Daily-mean currents from the Copernicus Marine Service global ocean
 analysis and forecast (1/12°, 10-day forecast; product GLOBAL_ANALYSISFORECAST_PHY_001_024,

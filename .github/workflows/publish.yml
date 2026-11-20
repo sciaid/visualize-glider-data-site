@@ -11,7 +11,12 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "37 13 * * *"      # daily, 13:37 UTC (5:37 am Pacific standard time)
+    # Three times a day: GitHub often starts scheduled runs hours late and may drop one, so
+    # more than one a day keeps the real-time pages fresh. Times in UTC; Pacific standard time
+    # is 5:37 am, 11:37 am and 5:37 pm (an hour later during daylight time).
+    - cron: "37 13 * * *"
+    - cron: "37 19 * * *"
+    - cron: "37 1 * * *"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +26,9 @@ permissions:
 
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  # A build on main (scheduled or after a merge) runs to the end and the next one waits;
+  # only pull-request builds are replaced by a newer push to the same branch.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
