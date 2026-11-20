@@ -55,7 +55,8 @@ Then commit and push (or open a pull request). The site rebuilds itself.
 
 ### Daily build from ERDDAP (automatic)
 
-`.github/workflows/publish.yml` runs every day (and on every push to `main`, and on demand from
+`.github/workflows/publish.yml` runs three times a day (13:37, 19:37 and 01:37 UTC; GitHub may start
+scheduled runs late or skip one) (and on every push to `main`, and on demand from
 **Actions → Publish site → Run workflow**). It downloads new or updated datasets from the IOOS
 Glider DAC ERDDAP, builds their pages and publishes the site. Nothing needs to run on your computer.
 
@@ -121,7 +122,7 @@ built without seafloor and the build prints a note.
 
 ## Ocean currents on the real-time page
 
-`scripts/fetch_currents.py` runs in the daily build. For each glider sending real-time data it
+`scripts/fetch_currents.py` runs in every build. For each glider sending real-time data it
 writes `currents/currents.json` (not committed): Copernicus Marine model currents (yesterday to
 +5 days, every model level down to the glider's dive depth), on the US West Coast NOAA WCOFS
 model currents and HF radar surface currents for the last 24 h, and the glider's own
