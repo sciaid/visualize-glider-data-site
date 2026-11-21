@@ -208,6 +208,18 @@ The line above the strip counts the days with a satellite value, with no clear v
 fetched yet. Values are fetched once and kept; the most recent 10 days are fetched again each
 day because near-real-time values are replaced.
 
+## Out now vs real-time data
+
+A deployment is **out now** when its newest real-time data are less than 14 days old. That is
+what the home map (red dot at the last position), the summary table, the region buttons, the
+deployments table ("Out now" filter and Status column) and the Real-time page map use. The home
+map and the deployments table decide this in your browser, so it stays current between builds.
+
+**Real-time data** describes the data, not the glider: thinned, not quality-controlled
+provisional data. A recovered glider keeps that label, and stays in the "Recently recovered"
+list on the Real-time page, until its delayed-mode dataset is published on the Glider DAC; then
+the site switches to the delayed-mode data automatically.
+
 ## Data status
 
 The badges at the top of the home and Real-time pages are written by each site build: when the
