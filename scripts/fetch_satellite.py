@@ -81,47 +81,56 @@ def sun_elevation(t, lat, lon):
     return np.degrees(np.arcsin(np.sin(la) * np.sin(dec) + np.cos(la) * np.cos(dec) * np.cos(ha)))
 
 
-def glider_surface(ds, now):
-    """Per UTC day of the last SAT_DAYS: the glider's median position and its 0-5 m temperature
-    (all profiles) and 0-10 m chlorophyll (night profiles). Returns {date: {...}}."""
-    t, la, lo = _f(ds["time"]), _f(ds["latitude"]), _f(ds["longitude"])
-    z = _f(ds["depth"])
-    keep = np.isfinite(t) & np.isfinite(la) & np.isfinite(lo) & (t >= now - (SAT_DAYS + 1) * 86400)
+def glider_daily(t, la, lo, z, T, C, keep=None, sun=None):
+    """Per UTC day: the glider's median position and its 0-5 m temperature (all profiles; 0-10 m
+    on days with no data above 5 m) and 0-10 m chlorophyll (night profiles).
+    t, la, lo: per profile; z: bin centres; T, C: [depth, profile] arrays or None."""
+    t, la, lo, z = (np.asarray(a, "f8") for a in (t, la, lo, z))
+    ok = np.isfinite(t) & np.isfinite(la) & np.isfinite(lo)
+    keep = ok if keep is None else keep & ok
     if not keep.any():
         return {}
-    night = sun_elevation(t, la, lo) < NIGHT_SUN_ELEV
+    sun = sun_elevation(t, la, lo) if sun is None else np.asarray(sun, "f8")
+    night = sun < NIGHT_SUN_ELEV
 
-    def col_mean(name, zmax, use):
-        if name not in ds.variables:
+    def col_mean(a, zmax, use):
+        if a is None:
             return None
-        a = _f(ds[name])[z < zmax]                                 # depth x profile
+        a = np.asarray(a, "f8")[z < zmax]                       # depth x profile
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)          # profiles with no shallow data
+            warnings.simplefilter("ignore", RuntimeWarning)       # profiles with no shallow data
             prof = np.nanmean(a, axis=0) if a.size else np.full(t.size, np.nan)
         return np.where(use, prof, np.nan)
 
-    T = col_mean("temperature", T_DEPTH, keep)
-    T10 = col_mean("temperature", T_DEPTH_FALLBACK, keep)
-    C = col_mean("chlorophyll", CHL_DEPTH, keep & night)
+    T5, T10 = col_mean(T, T_DEPTH, keep), col_mean(T, T_DEPTH_FALLBACK, keep)
+    Cn = col_mean(C, CHL_DEPTH, keep & night)
     days = np.array([dt.datetime.fromtimestamp(x, dt.timezone.utc).date().isoformat() if k else ""
-                     for x, k in zip(t, keep)])
+                     for x, k in zip(np.nan_to_num(t), keep)])
     out = {}
     for d in sorted(set(days) - {""}):
         m = days == d
         rec = {"lat": round(float(np.median(la[m])), 4), "lon": round(float(np.median(lo[m])), 4),
                "nProfiles": int(m.sum()), "nNight": int((m & night).sum())}
-        if T is not None and np.isfinite(T[m]).any():
-            rec["T"], rec["Tdepth"] = round(float(np.nanmean(T[m])), 2), T_DEPTH
+        if T5 is not None and np.isfinite(T5[m]).any():
+            rec["T"], rec["Tdepth"] = round(float(np.nanmean(T5[m])), 2), T_DEPTH
         elif T10 is not None and np.isfinite(T10[m]).any():           # no data above 5 m that day
             rec["T"], rec["Tdepth"] = round(float(np.nanmean(T10[m])), 2), T_DEPTH_FALLBACK
         mn = m & night
-        if C is not None and np.isfinite(C[mn]).any():
-            rec["chl"] = round(float(np.nanmean(C[mn])), 3)
-        cn = mn & np.isfinite(la) & np.isfinite(lo)
-        if cn.any():                                               # chlorophyll is matched at night positions
-            rec["latNight"], rec["lonNight"] = round(float(np.median(la[cn])), 4), round(float(np.median(lo[cn])), 4)
+        if Cn is not None and np.isfinite(Cn[mn]).any():
+            rec["chl"] = round(float(np.nanmean(Cn[mn])), 3)
+        if mn.any():                                               # chlorophyll is matched at night positions
+            rec["latNight"], rec["lonNight"] = round(float(np.median(la[mn])), 4), round(float(np.median(lo[mn])), 4)
         out[d] = rec
     return out
+
+
+def glider_surface(ds, now):
+    """glider_daily for the last SAT_DAYS of a real-time grid file."""
+    t = _f(ds["time"])
+    get = lambda n: _f(ds[n]) if n in ds.variables else None
+    keep = np.isfinite(t) & (t >= now - (SAT_DAYS + 1) * 86400)
+    return glider_daily(t, _f(ds["latitude"]), _f(ds["longitude"]), _f(ds["depth"]),
+                        get("temperature"), get("chlorophyll"), keep)
 
 
 # --------------------------------------------------------------------------- #

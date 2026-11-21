@@ -190,6 +190,24 @@ fluorescence), and in the Southern Ocean has few clear views.
 Satellite positions are each day's median glider position (night positions for chlorophyll),
 and the median of the satellite pixels within 5 km of it.
 
+### On the curtain pages
+
+When Temperature or Chlorophyll is selected, a strip above the section shows one value per UTC
+day for the whole deployment: the glider (black line; same depths and night rule as above) and
+the satellite at the glider's position that day (dots). This is done for every deployment, old
+and new.
+
+- **SST:** MUR (2002 to now), with its analysis error as the error bar.
+- **Chlorophyll:** only pixels a satellite actually saw that day (Copernicus-GlobColour L3,
+  4 km): the reprocessed multi-sensor series first, then the near-real-time multi-sensor series,
+  then the near-real-time OLCI series. Gap-filled values are not used here. Days with no clear
+  pixel within 5 km are counted as "no clear view". Days that no series covers yet (the
+  reprocessed series runs several months behind) are fetched again on later builds.
+
+The line above the strip counts the days with a satellite value, with no clear view, and not
+fetched yet. Values are fetched once and kept; the most recent 10 days are fetched again each
+day because near-real-time values are replaced.
+
 ## Regions and projects
 
 Each deployment is assigned to a region by its median position, using the lat/lon boxes in
