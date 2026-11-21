@@ -459,6 +459,9 @@ def main(argv=None):
                 except Exception as exc:
                     traceback.print_exc()
                     result["notes"].append(f"{g['name']}: HF radar failed ({type(exc).__name__}).")
+            for d, r in sorted(g.get("surface", {}).items()):
+                print(f"    glider {d}: {r.get('nProfiles')} profiles ({r.get('nNight')} night), "
+                      f"T 0-5 m {r.get('T')}, chl 0-10 m night {r.get('chl')}")
             for var, fn, need_cm in (("sst", sat.sst_layer, False), ("chl", sat.chl_layer, True)):
                 if need_cm and not have_cm:
                     continue

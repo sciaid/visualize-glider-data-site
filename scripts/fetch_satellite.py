@@ -229,7 +229,8 @@ def ostia_layer(g, box, out, workdir):
 def mur_layer(g, box, out, workdir):
     lat0, lat1, lon0, lon1 = box
     s = MUR_STRIDE
-    sub = f"[(last-{SAT_DAYS - 1}):1:(last)][({lat0:.2f}):{s}:({lat1:.2f})][({lon0:.2f}):{s}:({lon1:.2f})]"
+    # time by index (last-6 .. last); "(last-6)" in parentheses would mean 6 seconds before the last time
+    sub = f"[last-{SAT_DAYS - 1}:1:last][({lat0:.2f}):{s}:({lat1:.2f})][({lon0:.2f}):{s}:({lon1:.2f})]"
     url = f"{MUR_ERDDAP}.nc?analysed_sst{sub},analysis_error{sub}"
     fn = Path(workdir) / f"{g['name']}_mur.nc"
     _get(url, fn)
