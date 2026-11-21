@@ -445,6 +445,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <script id="data" type="application/json">__DATA__</script>
 <script>
 (function () {
+  const OUT_NOW_COLOR = '#c0262d';   // not the hover colour
   const DATA = JSON.parse(document.getElementById('data').textContent);
   const deps = DATA.deployments;
   // Ordinal blue ramp (steps 250..700) - one hue, light -> dark = earlier -> later year.
@@ -480,6 +481,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   L.control.scale({ imperial: false }).addTo(map);
   const renderer = L.canvas({ tolerance: 6 });   // generous hover/click target
 
+  // "Out now": real-time data in the last OUT_NOW_DAYS (decided in the visitor's browser, so it is
+  // current between site builds). Older real-time deployments are recovered gliders whose
+  // delayed-mode data are not published yet.
+  const OUT_NOW_DAYS = 14;
+  const outNow = d => d.mode === 'realtime' && (Date.now() / 1000 - d.end) < OUT_NOW_DAYS * 86400;
   deps.forEach(d => {
     const pts = d.lat.map((la, i) => [la, d.lon[i]]);
     d.line = L.polyline(pts, { color: d.color, weight: 2, opacity: 0.9, renderer });
@@ -490,6 +496,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     d.line.on('mouseout', () => highlight(d, false));
     d.line.on('click', e => openPopup(d, e.latlng));
     d.startMk.on('click', e => openPopup(d, e.latlng));
+    if (outNow(d)) {                       // latest position of a glider that is out now
+      const last = pts[pts.length - 1];
+      d.nowMk = L.circleMarker(last, { radius: 6, color: '#fff', weight: 2, fillColor: OUT_NOW_COLOR, fillOpacity: 1, renderer });
+      d.nowMk.bindTooltip(`${d.name} · out now (last data ${fmtDate(d.end)})`);
+      d.nowMk.on('click', e => openPopup(d, e.latlng));
+    }
   });
 
   function highlight(d, on) {
@@ -511,7 +523,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       `<div class="pop"><b>${esc(d.name)}</b><table>
        ${d.region ? `<tr><td>Region</td><td>${esc(d.region)}</td></tr>` : ''}
        ${d.project ? `<tr><td>Project</td><td>${esc(d.project)}</td></tr>` : ''}
-       ${d.mode === 'realtime' ? `<tr><td>Data</td><td><b>Real-time (provisional)</b></td></tr>` : ''}
+       ${outNow(d) ? `<tr><td>Status</td><td><b style="color:${OUT_NOW_COLOR}">Out now</b></td></tr>` : ''}
+       ${d.mode === 'realtime' ? `<tr><td>Data</td><td><b>Real-time (provisional)</b>${outNow(d) ? '' : ', delayed-mode not yet published'}</td></tr>` : ''}
        <tr><td>Start</td><td>${fmtTime(d.start)}</td></tr>
        <tr><td>End</td><td>${fmtTime(d.end)}</td></tr>
        <tr><td>Duration</td><td>${days} days</td></tr>
@@ -529,7 +542,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     const div = L.DomUtil.create('div', 'legend');
     div.innerHTML = '<div style="font-weight:600">Start year</div>' +
       years.map(y => `<div data-year="${y}"><span class="bar" style="background:${yearColor[y]}"></span>${y}</div>`).join('') +
-      `<div><span class="bar" style="background:${HL}"></span>hovered</div>`;
+      `<div><span class="bar" style="background:${HL}"></span>hovered</div>` +
+      (deps.some(outNow) ? `<div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${OUT_NOW_COLOR};border:2px solid #fff;box-shadow:0 0 0 1px #ccc"></span>glider out now</div>` : '');
     return div;
   };
   legend.addTo(map);
@@ -635,7 +649,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       row.innerHTML = `<input type="checkbox" ${d.checked ? 'checked' : ''}>
         <span class="swatch" style="background:${d.color}"></span>
         <span class="txt"><span class="name">${esc(d.name)}</span>
-        <span class="dates">${fmtDate(d.start)} → ${fmtDate(d.end)}</span></span>`;
+        <span class="dates">${fmtDate(d.start)} → ${outNow(d) ? '<b style="color:' + OUT_NOW_COLOR + '">out now</b>' : fmtDate(d.end)}</span></span>`;
       row.querySelector('input').onchange = e => { d.checked = e.target.checked; render(); };
       row.onmouseenter = () => { if (v.has(d)) highlight(d, true); };
       row.onmouseleave = () => { if (v.has(d)) highlight(d, false); };
@@ -645,8 +659,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     });
     deps.forEach(d => {
       const on = v.has(d);
-      if (on && !map.hasLayer(d.line)) { d.line.addTo(map); d.startMk.addTo(map); }
-      if (!on && map.hasLayer(d.line)) { map.removeLayer(d.line); map.removeLayer(d.startMk); }
+      if (on && !map.hasLayer(d.line)) { d.line.addTo(map); d.startMk.addTo(map); if (d.nowMk) d.nowMk.addTo(map); }
+      if (!on && map.hasLayer(d.line)) { map.removeLayer(d.line); map.removeLayer(d.startMk); if (d.nowMk) map.removeLayer(d.nowMk); }
     });
     document.getElementById('count').textContent =
       `${v.size} of ${deps.length} deployments on map · ${s.length} listed · double-click a name to zoom`;

@@ -133,9 +133,29 @@ def is_gridded(path):
         return False
 
 
+OUT_NOW_DAYS = 14      # real-time deployments with data this recent count as "out now"
+
+
+def annotate_out_now(index, data_dir):
+    """Set e["lastData"] (epoch of the newest profile) and e["outNow"] on real-time deployments.
+    Pages built here use it; the home map and the deployments table decide again in the browser."""
+    import time
+    now = time.time()
+    for e in index:
+        e.pop("outNow", None)
+        if e.get("mode") != "realtime":
+            continue
+        try:
+            d = json.loads((data_dir / f"{e['name']}.json").read_text(encoding="utf-8"))
+            e["lastData"] = int(d["time"][-1])
+        except (OSError, KeyError, IndexError, ValueError):
+            continue
+        e["outNow"] = now - e["lastData"] < OUT_NOW_DAYS * 86400
+
+
 REALTIME_NOTE = """::: {{.callout-warning}}
 ## Real-time data (provisional)
-Data through {end}. Real-time data are sent while the glider is deployed: they are thinned,
+{status}Data through {end}. Real-time data are sent while the glider is deployed: they are thinned,
 not quality-controlled and may have gaps. This page is replaced by the delayed-mode data once
 it is published.
 :::
@@ -184,8 +204,8 @@ def write_summary(index):
         yr = f"{years[0]}–{years[-1]}" if len(years) > 1 else f"{years[0]}"
         projects = ", ".join(sorted({e.get("project") for e in es if e.get("project")})) or "—"
         km = sum(e.get("distanceKm") or 0 for e in es)
-        nrt = sum(e.get("mode") == "realtime" for e in es)
-        count = f"{len(es)}" + (f" ({nrt} real-time)" if nrt else "")
+        now_n = sum(bool(e.get("outNow")) for e in es)
+        count = f"{len(es)}" + (f" ({now_n} out now)" if now_n else "")
         label = f"[{region}](index.html?region={quote(region)})" if len(groups) > 1 else region
         rows.append(f"| {label} | {count} | {yr} | {projects} | ≈ {round(km, -2):,.0f} km |")
     total = sum(e.get("distanceKm") or 0 for e in index)
@@ -250,7 +270,8 @@ DEPLOYMENTS_TABLE = """```{=html}
   <select id="depRegion" aria-label="Region"><option value="">All regions</option>__REGIONS__</select>
   <select id="depProject" aria-label="Project"><option value="">All projects</option>__PROJECTS__</select>
   <select id="depYear" aria-label="Start year"><option value="">All years</option>__YEARS__</select>
-  <label><input type="checkbox" id="depRt"> Real-time only</label>
+  <label><input type="checkbox" id="depNow"> Out now</label>
+  <label><input type="checkbox" id="depRt"> Real-time data only</label>
   <span id="depCount" class="dep-count"></span>
 </div>
 <div class="table-responsive">
@@ -259,7 +280,7 @@ DEPLOYMENTS_TABLE = """```{=html}
   <th data-type="text">Deployment</th><th data-type="text">Region</th><th data-type="text">Project</th>
   <th data-type="text">Start</th><th data-type="text">End</th>
   <th data-type="num">Profiles</th><th data-type="num">Max depth</th>
-  <th data-type="num" title="Estimate: see Methods">Distance*</th><th data-type="num">Per day*</th><th data-type="text">ERDDAP data</th>
+  <th data-type="num" title="Estimate: see Methods">Distance*</th><th data-type="num">Per day*</th><th data-type="text">Status</th><th data-type="text">ERDDAP data</th>
 </tr></thead>
 <tbody>
 __ROWS__
@@ -277,6 +298,7 @@ __ROWS__
   .dep-table td { white-space:nowrap; }
   .dep-table td:nth-child(2), .dep-table td:nth-child(3), .dep-table td:last-child { white-space:normal; min-width:7em; }
   .dep-rt { color:#b4501a; font-style:italic; }
+  .dep-now { color:#c0262d; font-weight:600; }
   .dep-none { color:#6c757d; font-style:italic; }
 </style>
 <script>
@@ -285,13 +307,24 @@ __ROWS__
   const rows = [...body.rows];
   const q = document.getElementById('depSearch'), reg = document.getElementById('depRegion'),
         prj = document.getElementById('depProject'), yr = document.getElementById('depYear'),
-        rt = document.getElementById('depRt'), count = document.getElementById('depCount');
-  const params = new URLSearchParams(location.search);          // ?region=, ?project=, ?year=, ?search=, ?rt=1
+        rt = document.getElementById('depRt'), now = document.getElementById('depNow'), count = document.getElementById('depCount');
+  // "out now": real-time data in the last 14 days, decided here so it is current between builds
+  const OUT_NOW_DAYS = 14, nowS = Date.now() / 1000;
+  rows.forEach(r => {
+    const out = r.dataset.mode === 'realtime' && r.dataset.last && nowS - +r.dataset.last < OUT_NOW_DAYS * 86400;
+    r.dataset.now = out ? '1' : '';
+    const cell = r.querySelector('td.dep-status');
+    cell.innerHTML = out ? '<span class="dep-now">out now</span>'
+      : r.dataset.mode === 'realtime' ? '<span class="dep-rt">real-time data</span>' : 'delayed-mode';
+    cell.dataset.sort = out ? '0' : r.dataset.mode === 'realtime' ? '1' : '2';
+  });
+  const params = new URLSearchParams(location.search);          // ?region=, ?project=, ?year=, ?search=, ?rt=1, ?now=1
   if (params.get('region')) reg.value = params.get('region');
   if (params.get('project')) prj.value = params.get('project');
   if (params.get('year')) yr.value = params.get('year');
   if (params.get('search')) q.value = params.get('search');
   if (params.get('rt') === '1') rt.checked = true;
+  if (params.get('now') === '1') now.checked = true;
   function filter() {
     const s = q.value.trim().toLowerCase();
     let n = 0;
@@ -299,12 +332,12 @@ __ROWS__
       const d = r.dataset;
       const ok = (!s || r.textContent.toLowerCase().includes(s)) && (!reg.value || d.region === reg.value)
               && (!prj.value || d.project === prj.value) && (!yr.value || d.year === yr.value)
-              && (!rt.checked || d.mode === 'realtime');
+              && (!rt.checked || d.mode === 'realtime') && (!now.checked || d.now === '1');
       r.style.display = ok ? '' : 'none'; if (ok) n++;
     });
     count.textContent = `Showing ${n} of ${rows.length} deployments`;
   }
-  [q, reg, prj, yr, rt].forEach(el => el.addEventListener('input', filter));
+  [q, reg, prj, yr, rt, now].forEach(el => el.addEventListener('input', filter));
   [...table.tHead.rows[0].cells].forEach((th, c) => th.addEventListener('click', () => {
     const asc = !th.classList.contains('asc');
     [...th.parentNode.cells].forEach(x => x.classList.remove('asc', 'desc'));
@@ -324,7 +357,7 @@ __ROWS__
 
 def write_deployments(index):
     """deployments.qmd: one table of every deployment with search, region/project/year filters and
-    sortable columns (newest first). ?region=, ?project=, ?year=, ?search= and ?rt=1 preset the filters."""
+    sortable columns (newest first). ?region=, ?project=, ?year=, ?search=, ?rt=1 and ?now=1 preset the filters."""
     esc = html.escape
     rows = []
     for e in sorted(index, key=lambda e: e["start"], reverse=True):
@@ -337,15 +370,16 @@ def write_deployments(index):
             data = '<span class="dep-none">no ERDDAP dataset yet</span>'
         rows.append(
             f'<tr data-region="{esc(e.get("region") or "")}" data-project="{esc(e.get("project") or "")}" '
-            f'data-year="{e["start"][:4]}" data-mode="{esc(e.get("mode") or "")}">'
+            f'data-year="{e["start"][:4]}" data-mode="{esc(e.get("mode") or "")}" data-last="{e.get("lastData", "")}">'
             f'<td><a href="deployments/{esc(e["name"])}.html">{esc(e["name"])}</a>'
-            + (' <span class="dep-rt">real-time</span>' if rt else "") + "</td>"
+            + "</td>"
             f'<td>{esc(e.get("region") or "")}</td><td>{esc(e.get("project") or "")}</td>'
             f'<td>{esc(e["start"])}</td><td>{esc(e["end"])}</td>'
             f'<td data-sort="{e["profiles"]}">{e["profiles"]:,}</td>'
             f'<td data-sort="{e["maxDepth"]:.0f}">{e["maxDepth"]:.0f} m</td>'
             f'<td data-sort="{"" if km is None else round(km, 1)}">{esc(fmt_distance(e))}</td>'
             f'<td data-sort="{"" if not (km is not None and days) else round(km / days, 2)}">{esc(fmt_per_day(e))}</td>'
+            f'<td class="dep-status">{"real-time data" if rt else "delayed-mode"}</td>'
             f"<td>{data}</td></tr>")
     opts = lambda vals: "".join(f'<option value="{esc(v)}">{esc(v)}</option>' for v in vals)
     table = (DEPLOYMENTS_TABLE
@@ -373,8 +407,8 @@ def write_regionbar(index):
     def button(name, es, label=None):
         years = sorted({int(e["start"][:4]) for e in es})
         yr = f"{years[0]}–{years[-1]}" if len(years) > 1 else (f"{years[0]}" if years else "")
-        nrt = sum(e.get("mode") == "realtime" for e in es)
-        rt = f' · <span class="rb-rt">{nrt} real-time</span>' if nrt else ""
+        now_n = sum(bool(e.get("outNow")) for e in es)
+        rt = f' · <span class="rb-rt">{now_n} out now</span>' if now_n else ""
         n = len(es)
         return (f'  <button type="button" data-region="{html.escape(name)}" aria-pressed="false">'
                 f'<span class="rb-name">{html.escape(label or name)}</span>'
@@ -406,7 +440,7 @@ def write_realtime(index, data_dir):
     currents_map.write_map(ROOT / "realtime_map")
     import datetime as dt
     now = dt.datetime.now(dt.timezone.utc)
-    rows = []
+    rows, gone = [], []
     for e in sorted((e for e in index if e.get("mode") == "realtime"), key=lambda e: e["end"], reverse=True):
         try:
             d = json.loads((data_dir / f"{e['name']}.json").read_text(encoding="utf-8"))
@@ -417,20 +451,28 @@ def write_realtime(index, data_dir):
             through, ago = last_t.strftime("%Y-%m-%d %H:%M UTC"), f"{age:.1f}"
         except (OSError, KeyError, IndexError, ValueError):
             pos, through, ago = "", e["end"], ""
-        rows.append(f"| [{e['name']}](deployments/{e['name']}.qmd) | {e.get('region', '')} | {e.get('project', '')} "
-                    f"| {e['start']} | {through} | {ago} | {pos} | {e['profiles']:,} |")
-    body = ("| Deployment | Region | Project | Start | Data through | Days since last data | Latest position | Profiles |\n"
-            "|---|---|---|---|---|---|---|---|\n" + "\n".join(rows)) if rows else \
-        "No deployments are currently shown from real-time data."
+        (rows if e.get("outNow") else gone).append(
+            f"| [{e['name']}](deployments/{e['name']}.qmd) | {e.get('region', '')} | {e.get('project', '')} "
+            f"| {e['start']} | {through} | {ago} | {pos} | {e['profiles']:,} |")
+    head = ("| Deployment | Region | Project | Start | Data through | Days since last data | Last position | Profiles |\n"
+            "|---|---|---|---|---|---|---|---|\n")
+    body = (head + "\n".join(rows)) if rows else f"No glider has sent data in the last {OUT_NOW_DAYS} days."
+    gone_body = (f"""## Recently recovered: delayed-mode data not yet published
+
+These gliders have sent no data for over {OUT_NOW_DAYS} days, so they are no longer on the map; their
+real-time (provisional) data stay here until the delayed-mode data are published on the Glider DAC.
+
+""" + head + "\n".join(gone) + "\n") if gone else ""
     (ROOT / "realtime.qmd").write_text(f"""---
 title: "Real-time deployments"
 page-layout: full
 ---
 
-Deployments for which only **real-time (provisional)** data are published on the
+Gliders out now (real-time data in the last {OUT_NOW_DAYS} days), and recovered gliders whose only
+published data are still the **real-time (provisional)** data on the
 [IOOS Glider DAC ERDDAP](https://gliders.ioos.us/erddap/). Real-time data are thinned, not
-quality-controlled and may have gaps; ERDDAP is updated every few days while a glider is out.
-Each deployment moves to delayed-mode data automatically when that is published.
+quality-controlled and may have gaps. Each deployment moves to delayed-mode data automatically
+when that is published.
 
 {{{{< include _status.md >}}}}
 
@@ -442,10 +484,11 @@ See [Methods](methods.qmd#ocean-currents-on-the-real-time-map) for the sources.
 <iframe src="realtime_map/index.html" title="Map of gliders out now with ocean currents"
         style="width:100%; height:78vh; border:1px solid #e2e0db; border-radius:6px;"></iframe>
 
-## Real-time datasets
+## Out now: real-time datasets
 
 {body}
-""", encoding="utf-8")
+
+{gone_body}""", encoding="utf-8")
 
 
 def write_status(status, index):
@@ -568,13 +611,18 @@ def main():
 
     # 5. Pages
     print("\n== Pages ==")
+    annotate_out_now(index, data_dir)
     (ROOT / "deployments").mkdir(exist_ok=True)
     for e in index:
         page = DEPLOYMENT_PAGE.format(
             name=e["name"], region=e.get("region") or "", project=e.get("project") or "", distance=fmt_distance(e), per_day=fmt_per_day(e), glider=e.get("glider") or "",
             start=e["start"], end=e["end"], profiles=e["profiles"], maxDepth=e["maxDepth"],
             area=fmt_area(e), source=fmt_source(e), sensors=fmt_sensors(e),
-            realtime_note=REALTIME_NOTE.format(end=e["end"]) if e.get("mode") == "realtime" else "",
+            realtime_note=REALTIME_NOTE.format(
+                end=e["end"],
+                status="**This glider is out now.** " if e.get("outNow") else
+                       "The glider has sent no data for over 14 days (recovered); delayed-mode data are not published yet. ")
+                if e.get("mode") == "realtime" else "",
             project_note=(f" · **Project:** {e['projectFull']}"
                           if e.get("projectFull") and e["projectFull"] != e.get("project") else ""))
         (ROOT / "deployments" / f"{e['name']}.qmd").write_text(page, encoding="utf-8")
