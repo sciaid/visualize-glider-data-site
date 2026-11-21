@@ -160,6 +160,36 @@ every dive, or every value below 1 cm/s.
 
 Arrows are drawn every 2nd model cell (about 1/6°); colour and length show speed.
 
+## Satellite SST and chlorophyll
+
+The real-time map can show satellite sea surface temperature or chlorophyll around each glider
+for the last 7 days, and the glider pop-up puts the satellite value at the glider next to the
+glider's own near-surface value for the day chosen.
+
+**SST** is MUR v4.1 (NASA JPL; 0.01°, daily), read every 2nd pixel from the NOAA CoastWatch
+ERDDAP. It is a gap-free analysis of *foundation* temperature (below any daytime surface
+warming): under cloud it is filled from microwave sensors (about 25 km, and not usable near
+coasts or the ice edge), other days and in-situ data, so near the Antarctic Peninsula in cloudy
+weather it is largely interpolated. The pop-up shows MUR's own estimated error with the value.
+If the CoastWatch server refuses the request, the map uses OSTIA (UK Met Office, 0.05°,
+daily, gap-free foundation SST) from Copernicus Marine instead, and the Sources line says so.
+The glider value is the mean of the 0–5 m bin over that UTC day's profiles, or of 0–10 m on days
+with no data above 5 m (decimated real-time data often start around 6–10 m); the pop-up shows
+which.
+
+**Chlorophyll** is Copernicus-GlobColour, multi-sensor, 4 km, daily, near real time. The map
+draws the gap-free (L4) field; pixels a satellite actually saw that day (in the observed-only
+L3 field on the same grid) are opaque and pixels filled by interpolation under cloud are
+faint. At the glider the value comes from observed pixels within 5 km where there are any,
+and the pop-up says whether it was observed or interpolated. The glider value is the mean of the
+0–10 m bins over that day's night profiles (sun below the horizon), since daytime fluorescence
+is lowered by non-photochemical quenching. Expect differences: the satellite sees only the top
+optical depth, misses subsurface chlorophyll maxima, uses a different method (ocean colour vs
+fluorescence), and in the Southern Ocean has few clear views.
+
+Satellite positions are each day's median glider position (night positions for chlorophyll),
+and the median of the satellite pixels within 5 km of it.
+
 ## Regions and projects
 
 Each deployment is assigned to a region by its median position, using the lat/lon boxes in

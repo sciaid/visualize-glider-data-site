@@ -40,6 +40,8 @@ from pathlib import Path
 import numpy as np
 import netCDF4
 
+import fetch_satellite as sat
+
 MODEL_DATASET = "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m"      # daily mean uo, vo on depth levels
 MODEL_NAME = "Copernicus Marine global analysis and forecast (1/12°, daily means)"
 MODEL_DOI = "https://doi.org/10.48670/moi-00016"
@@ -136,7 +138,8 @@ def gliders(cache):
                         "diveDepth": dive,
                         "track": {"t": [int(x) for x in t[::step]], "lat": [round(float(x), 4) for x in la[::step]],
                                   "lon": [round(float(x), 4) for x in lo[::step]]},
-                        "dac": glider_dac(ds, now)})
+                        "dac": glider_dac(ds, now),
+                        "surface": sat.glider_surface(ds, now)})
     return out
 
 
@@ -379,6 +382,16 @@ def log_at_glider(m):
         print(f"      {d['date']}: {txt}")
 
 
+def _call(fn, *args):
+    """Run fn in the child; send back exceptions as plain RuntimeErrors (some, like HTTPError,
+    hold open files and cannot be passed back to the parent process)."""
+    try:
+        return fn(*args)
+    except Exception as exc:
+        traceback.print_exc()
+        raise RuntimeError(f"{type(exc).__name__}: {exc}") from None
+
+
 def isolated(fn, *args, tries=2):
     """fn(*args) in a separate process. The Copernicus and WCOFS readers occasionally crash the
     Python process (segmentation fault inside the netCDF/HDF5 libraries); in a child process
@@ -386,7 +399,7 @@ def isolated(fn, *args, tries=2):
     for k in range(tries):
         with ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn")) as ex:
             try:
-                return ex.submit(fn, *args).result()
+                return ex.submit(_call, fn, *args).result()
             except BrokenProcessPool:
                 print(f"    {fn.__name__} crashed (attempt {k + 1} of {tries})", flush=True)
     raise RuntimeError(f"{fn.__name__} crashed {tries} times")
@@ -446,6 +459,25 @@ def main(argv=None):
                 except Exception as exc:
                     traceback.print_exc()
                     result["notes"].append(f"{g['name']}: HF radar failed ({type(exc).__name__}).")
+            for d, r in sorted(g.get("surface", {}).items()):
+                print(f"    glider {d}: {r.get('nProfiles')} profiles ({r.get('nNight')} night), "
+                      f"T 0-{r.get('Tdepth', 5):g} m {r.get('T')}, chl 0-10 m night {r.get('chl')}")
+            for var, fn, need_cm in (("sst", sat.sst_layer, False), ("chl", sat.chl_layer, True)):
+                if need_cm and not have_cm:
+                    continue
+                try:
+                    g.setdefault("sat", {})[var] = b = isolated(fn, g, box(g), out, tmp)
+                    at = [d for d in b["days"] if "atGlider" in d]
+                    last = at[-1] if at else None
+                    print(f"    satellite {var}: {len(b['days'])} days, colour range {b['range']}"
+                          + (f", at glider {last['date']}: {last['atGlider']['v']}" + (
+                              f" (observed)" if last['atGlider'].get('observed') else
+                              " (interpolated)" if last['atGlider'].get('observed') is False else "")
+                             + f", glider {g['surface'].get(last['date'], {}).get('T' if var == 'sst' else 'chl')}"
+                             if last else "") + (f"; {b['note']}" if b.get("note") else ""))
+                except Exception as exc:
+                    traceback.print_exc()
+                    result["notes"].append(f"{g['name']}: satellite {'SST' if var == 'sst' else 'chlorophyll'} failed ({type(exc).__name__}).")
             result["gliders"].append(g)
             write_result(out, dict(result, gliders=result["gliders"] + gs[len(result["gliders"]):]))
     write_result(out, result)
