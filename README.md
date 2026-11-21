@@ -131,7 +131,9 @@ depth-averaged currents for the last 7 days (`u`, `v` from the real-time dataset
 real, such as `u` equal to `v` for every dive, are left off with a note). `scripts/fetch_satellite.py`
 (called from the same step) adds satellite SST (MUR, CoastWatch ERDDAP) and chlorophyll
 (Copernicus-GlobColour gap-free and observed-only) images around each glider for the last 7 days,
-plus the satellite value at the glider beside its 0–5 m temperature and 0–10 m night chlorophyll. `realtime_map/index.html` (written by `build_site.py` from
+plus the satellite value at the glider beside its 0–5 m temperature and 0–10 m night chlorophyll.
+`scripts/fetch_matchups.py` does the same for every deployment, one value per day, for the strip
+above the curtain (`viewer/data/<name>.sat.json`, cached in `.erddap-cache/matchups`). `realtime_map/index.html` (written by `build_site.py` from
 `scripts/currents_map.py`) draws them, with day and depth sliders.
 
 The model layer needs a free Copernicus Marine account

@@ -691,7 +691,7 @@ __PLOTLY__
 <script id="data" type="application/json">__DATA__</script>
 <script>
 (async function () {
-  let D;
+  let D, SATM = null;      // SATM: daily satellite vs glider match-ups (data/<name>.sat.json), if any
   const emb = document.getElementById('data').textContent.trim();
   if (emb && emb !== 'null') {
     D = JSON.parse(emb);
@@ -715,6 +715,7 @@ __PLOTLY__
     if (topLevel || params.get('picker') === '1') document.getElementById('depRow').style.display = '';
     if (topLevel) document.getElementById('backLink').style.display = '';   // full-screen: way back to the site
     D = await fetch(`data/${encodeURIComponent(name)}.json`).then(r => r.json());
+    SATM = await fetch(`data/${encodeURIComponent(name)}.sat.json`).then(r => r.ok ? r.json() : null).catch(() => null);
   }
   const CMAPS = __CMAPS__;
   const f32 = b64 => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Float32Array(u.buffer); };
@@ -1088,14 +1089,57 @@ __PLOTLY__
         });
       }
     }
+    // satellite vs glider strip (temperature and chlorophyll only)
+    const strip = satStrip(v);
+    const annotations = [];
+    if (strip) { strip.traces.forEach(tr => traces2.push(tr)); annotations.push(strip.note); }
+    const top = strip ? 0.74 : 1;
     Plotly.react('c2d', traces2, {
-      margin: { l: 56, r: 20, t: 26, b: 36 }, paper_bgcolor: '#fcfcfb', plot_bgcolor: '#f3f2ef',
-      xaxis: { type: 'date', showgrid: false }, yaxis: { range: [yMax, 0], title: { text: 'depth (m)' }, showgrid: false, domain: [0, SUN ? 0.93 : 1] },
-      yaxis2: { domain: [0.95, 1], showticklabels: true, tickvals: [0], ticktext: ['sun'], fixedrange: true, showgrid: false, zeroline: false },
+      margin: { l: 56, r: 20, t: strip ? 46 : 26, b: 36 }, paper_bgcolor: '#fcfcfb', plot_bgcolor: '#f3f2ef',
+      xaxis: { type: 'date', showgrid: false }, yaxis: { range: [yMax, 0], title: { text: 'depth (m)' }, showgrid: false, domain: [0, SUN ? top - 0.07 : top] },
+      yaxis2: { domain: [top - 0.05, top], showticklabels: true, tickvals: [0], ticktext: ['sun'], fixedrange: true, showgrid: false, zeroline: false },
+      ...(strip ? { yaxis3: strip.axis } : {}), annotations,
       legend: { orientation: 'h', x: 1, xanchor: 'right', y: 1.0, yanchor: 'bottom', bgcolor: 'rgba(0,0,0,0)', font: { size: 11 } },
       shapes, uirevision: 'keep2', dragmode: 'zoom',
     }, { responsive: true, displaylogo: false });
     drawTS();
+  }
+
+  // ----- satellite vs glider, one value per UTC day
+  function satStrip(v) {
+    if (!SATM || !SATM.days || !SATM.days.length) return null;
+    const isT = v.name === 'temperature', isC = v.name === 'chlorophyll';
+    if (!isT && !isC) return null;
+    const days = SATM.days, noon = d => d + 'T12:00:00Z';
+    const g = days.filter(d => (isT ? d.T : d.chl) != null);
+    const sv = days.filter(d => (isT ? d.sst : d.satChl) != null);
+    const unit = isT ? '°C' : 'mg m⁻³', dig = isT ? 2 : 3;
+    const gLabel = isT ? 'Glider 0–5 m' : 'Glider 0–10 m, night';
+    const traces = [
+      { type: 'scatter', mode: 'lines+markers', x: g.map(d => noon(d.date)), y: g.map(d => isT ? d.T : d.chl), yaxis: 'y3',
+        line: { color: '#0b0b0b', width: 1.2 }, marker: { size: 4, color: '#0b0b0b' }, name: gLabel, showlegend: true,
+        customdata: g.map(d => [d.date, isT ? `0–${d.Tdepth || 5} m, ${d.nProfiles} profiles` : `0–10 m, ${d.nNight} night profiles`,
+          (() => { const s = isT ? d.sst : d.satChl, x = isT ? d.T : d.chl; return s == null ? 'no satellite value' : `glider − satellite ${(x - s).toFixed(dig)} ${unit}`; })()]),
+        hovertemplate: `%{customdata[0]}<br>glider %{y:.${dig}f} ${unit} (%{customdata[1]})<br>%{customdata[2]}<extra></extra>` },
+      { type: 'scatter', mode: 'markers', x: sv.map(d => noon(d.date)), y: sv.map(d => isT ? d.sst : d.satChl), yaxis: 'y3',
+        marker: { size: 7, color: isT ? '#eb6834' : '#17923b', line: { color: '#ffffff', width: 1 } },
+        error_y: isT ? { type: 'data', array: sv.map(d => d.sstErr || 0), visible: true, color: 'rgba(235,104,52,0.6)', thickness: 1, width: 0 } : undefined,
+        name: isT ? 'Satellite SST (MUR)' : 'Satellite chlorophyll (observed)', showlegend: true,
+        customdata: sv.map(d => [d.date, isT ? `± ${(d.sstErr || 0).toFixed(2)} (MUR analysis error)` : (d.chlProduct || '')]),
+        hovertemplate: `%{customdata[0]}<br>satellite %{y:.${dig}f} ${unit} %{customdata[1]}<extra></extra>` },
+    ];
+    const n = isT ? days.filter(d => d.T != null).length : days.filter(d => d.nNight).length;
+    const st = k => days.filter(d => (isT ? d.sstStatus : d.chlStatus) === k).length;
+    const parts = [`${sv.length} of ${n} days with a satellite value`];
+    if (isC && st('cloud')) parts.push(`${st('cloud')} with no clear view`);
+    if (st('pending')) parts.push(`${st('pending')} not fetched yet`);
+    if (isC && days.length - n) parts.push(`${days.length - n} without night profiles`);
+    const note = { xref: 'paper', yref: 'paper', x: 0, y: 1, xanchor: 'left', yanchor: 'bottom', yshift: 20, showarrow: false,
+                   text: `Satellite vs glider: ${parts.join(' · ')}`, font: { size: 11, color: '#5c6670' } };
+    const axis = { domain: [0.79, 1], title: { text: unit, font: { size: 11 } }, type: isC ? 'log' : 'linear', showgrid: true,
+                   gridcolor: '#e4e2dc', zeroline: false, fixedrange: true,
+                   ...(isC ? { tickvals: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50], ticktext: ['0.01', '0.02', '0.05', '0.1', '0.2', '0.5', '1', '2', '5', '10', '20', '50'] } : { nticks: 4 }) };
+    return { traces, axis, note };
   }
 
   // ----- T-S diagram
