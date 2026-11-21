@@ -23,6 +23,7 @@ daytime fluorescence is lowered by non-photochemical quenching.
 """
 import datetime as dt
 import time
+import warnings
 import urllib.request
 from pathlib import Path
 
@@ -38,6 +39,9 @@ MUR_ERDDAP = "https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41"
 MUR_NAME = "MUR SST v4.1 (NASA JPL, 0.01°, daily, gap-free), via NOAA CoastWatch ERDDAP"
 MUR_URL = "https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1"
 MUR_STRIDE = 2              # every 2nd 0.01 deg pixel (~2 km)
+OSTIA = "METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2"       # Copernicus Marine; fallback when ERDDAP refuses
+OSTIA_NAME = "OSTIA SST (UK Met Office, 0.05°, daily, gap-free), via Copernicus Marine (MUR was not available)"
+OSTIA_DOI = "https://doi.org/10.48670/moi-00165"
 CHL_L4 = "cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D"
 CHL_L3 = "cmems_obs-oc_glo_bgc-plankton_nrt_l3-multi-4km_P1D"
 CHL_NAME = "Copernicus-GlobColour chlorophyll, multi-sensor 4 km daily (gap-free L4 and observed-only L3)"
@@ -89,7 +93,8 @@ def glider_surface(ds, now):
         if name not in ds.variables:
             return None
         a = _f(ds[name])[z < zmax]                                 # depth x profile
-        with np.errstate(all="ignore"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)          # profiles with no shallow data
             prof = np.nanmean(a, axis=0) if a.size else np.full(t.size, np.nan)
         return np.where(use, prof, np.nan)
 
@@ -188,6 +193,40 @@ def _get(url, path, tries=3):
 
 
 def sst_layer(g, box, out, workdir):
+    """MUR from the CoastWatch ERDDAP; if that server refuses (it sometimes answers 403 to the
+    build machines), OSTIA from Copernicus Marine instead."""
+    try:
+        return mur_layer(g, box, out, workdir)
+    except Exception as exc:
+        print(f"    MUR not available ({type(exc).__name__}: {exc}); using OSTIA", flush=True)
+        return ostia_layer(g, box, out, workdir)
+
+
+def ostia_layer(g, box, out, workdir):
+    import copernicusmarine
+    lat0, lat1, lon0, lon1 = box
+    today = dt.datetime.now(dt.timezone.utc).date()
+    fn = f"{g['name']}_ostia.nc"
+    copernicusmarine.subset(
+        dataset_id=OSTIA, variables=["analysed_sst", "analysis_error"],
+        minimum_longitude=lon0, maximum_longitude=lon1, minimum_latitude=lat0, maximum_latitude=lat1,
+        start_datetime=f"{today - dt.timedelta(days=SAT_DAYS + 2)}T00:00:00", end_datetime=f"{today}T23:59:59",
+        output_directory=str(workdir), output_filename=fn, disable_progress_bar=True)
+    with netCDF4.Dataset(Path(workdir) / fn) as ds:
+        tv = ds["time"]
+        tt = netCDF4.num2date(tv[:], tv.units, only_use_cftime_datetimes=False, only_use_python_datetimes=True)
+        t = np.array([x.replace(tzinfo=dt.timezone.utc).timestamp() for x in tt])
+        sst, err = _f(ds["analysed_sst"]), _f(ds["analysis_error"])
+        if getattr(ds["analysed_sst"], "units", "K").lower().startswith("k") or np.nanmedian(sst) > 200:
+            sst = sst - 273.15
+        lat, lon = _f(ds["latitude"]), _f(ds["longitude"])
+    keep = np.argsort(t)[-SAT_DAYS:]
+    b = sat_block(g, "sst", t[keep], lat, lon, sst[keep], err[keep], None, out)
+    b.update(source=OSTIA_NAME, url=OSTIA_DOI)
+    return b
+
+
+def mur_layer(g, box, out, workdir):
     lat0, lat1, lon0, lon1 = box
     s = MUR_STRIDE
     sub = f"[(last-{SAT_DAYS - 1}):1:(last)][({lat0:.2f}):{s}:({lat1:.2f})][({lon0:.2f}):{s}:({lon1:.2f})]"

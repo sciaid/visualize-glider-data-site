@@ -382,6 +382,16 @@ def log_at_glider(m):
         print(f"      {d['date']}: {txt}")
 
 
+def _call(fn, *args):
+    """Run fn in the child; send back exceptions as plain RuntimeErrors (some, like HTTPError,
+    hold open files and cannot be passed back to the parent process)."""
+    try:
+        return fn(*args)
+    except Exception as exc:
+        traceback.print_exc()
+        raise RuntimeError(f"{type(exc).__name__}: {exc}") from None
+
+
 def isolated(fn, *args, tries=2):
     """fn(*args) in a separate process. The Copernicus and WCOFS readers occasionally crash the
     Python process (segmentation fault inside the netCDF/HDF5 libraries); in a child process
@@ -389,7 +399,7 @@ def isolated(fn, *args, tries=2):
     for k in range(tries):
         with ProcessPoolExecutor(max_workers=1, mp_context=mp.get_context("spawn")) as ex:
             try:
-                return ex.submit(fn, *args).result()
+                return ex.submit(_call, fn, *args).result()
             except BrokenProcessPool:
                 print(f"    {fn.__name__} crashed (attempt {k + 1} of {tries})", flush=True)
     raise RuntimeError(f"{fn.__name__} crashed {tries} times")

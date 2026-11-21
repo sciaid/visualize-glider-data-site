@@ -171,6 +171,8 @@ ERDDAP. It is a gap-free analysis of *foundation* temperature (below any daytime
 warming): under cloud it is filled from microwave sensors (about 25 km, and not usable near
 coasts or the ice edge), other days and in-situ data, so near the Antarctic Peninsula in cloudy
 weather it is largely interpolated. The pop-up shows MUR's own estimated error with the value.
+If the CoastWatch server refuses the request, the map uses OSTIA (UK Met Office, 0.05°,
+daily, gap-free foundation SST) from Copernicus Marine instead, and the Sources line says so.
 The glider value is the mean of the 0–5 m bin over that UTC day's profiles.
 
 **Chlorophyll** is Copernicus-GlobColour, multi-sensor, 4 km, daily, near real time. The map
