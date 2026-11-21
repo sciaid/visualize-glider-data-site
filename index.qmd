@@ -4,6 +4,8 @@ page-layout: full
 toc: false
 ---
 
+{{< include _status.md >}}
+
 Glider deployments by the NOAA Southwest Fisheries Science Center (SWFSC) Ecosystem
 Science Division (ESD) Glider Team. Deployments around the South Shetland Islands and the
 Antarctic Peninsula are from NOAA's Antarctic Marine Living Resources (AMLR) program;
@@ -14,8 +16,6 @@ filter by project, start year or deployment name; click a track and choose
 deployment.
 
 {{< include _summary.md >}}
-
-{{< include _status.md >}}
 
 {{< include _regionbar.md >}}
 

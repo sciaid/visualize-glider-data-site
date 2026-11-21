@@ -208,6 +208,15 @@ The line above the strip counts the days with a satellite value, with no clear v
 fetched yet. Values are fetched once and kept; the most recent 10 days are fetched again each
 day because near-real-time values are replaced.
 
+## Data status
+
+The badges at the top of the home and Real-time pages are written by each site build: when the
+build ran, the newest glider data on the Glider DAC (green when less than a day old, yellow
+when less than 3 days, grey when older), and the newest day of satellite SST and chlorophyll on
+the site. A "problems" badge and a line under them appear when the Glider DAC could not be
+reached, a dataset could not be updated, or MUR SST was not available. Times are US Pacific.
+The last-commit badge in the page footer shows the latest change to the site's code.
+
 ## Regions and projects
 
 Each deployment is assigned to a region by its median position, using the lat/lon boxes in
