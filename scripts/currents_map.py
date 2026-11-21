@@ -1,7 +1,7 @@
 """
 currents_map.py - The real-time map page (realtime_map/index.html): gliders that are out now,
-with model current forecasts (depth slider, day slider), observed HF radar currents and the
-gliders' own depth-averaged currents.
+with model current forecasts (depth slider, day slider), observed HF radar currents, the
+gliders' own depth-averaged currents and satellite SST and chlorophyll.
 
 The page reads ../currents/currents.json, written each day by fetch_currents.py. It is a static
 template; build_site.py writes it with write_map().
@@ -64,6 +64,13 @@ HTML = r"""<!DOCTYPE html>
   <label class="line"><input type="checkbox" id="dOn" checked> Glider-measured, depth-averaged over each dive (last 7 days)</label>
   <div class="muted" id="dacNote"></div>
 
+  <h2>Satellite, surface</h2>
+  <label class="line"><input type="radio" name="sat" value="" checked> Off</label>
+  <label class="line"><input type="radio" name="sat" value="sst"> Sea surface temperature (MUR)</label>
+  <label class="line"><input type="radio" name="sat" value="chl"> Chlorophyll (GlobColour)</label>
+  <div>Day: <select id="satDay"></select></div>
+  <div class="muted" id="satNote"></div>
+
   <h2>Track</h2>
   <label class="line"><input type="checkbox" id="tOn" checked> Glider tracks</label>
 
@@ -87,6 +94,8 @@ HTML = r"""<!DOCTYPE html>
   L.control.scale({ imperial: false }).addTo(map);
   const arrowsModel = L.layerGroup().addTo(map), arrowsHfr = L.layerGroup().addTo(map), arrowsDac = L.layerGroup().addTo(map), tracks = L.layerGroup().addTo(map);
   const renderer = L.canvas({ padding: 0.3 });
+  map.createPane('sat'); map.getPane('sat').style.zIndex = 350;      // under arrows and tracks
+  const satLayer = L.layerGroup().addTo(map);
 
   let C;
   try { C = await fetch('../currents/currents.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw 0; return r.json(); }); }
@@ -214,6 +223,53 @@ HTML = r"""<!DOCTYPE html>
     document.getElementById('dacNote').textContent = notes.length ? notes.join(' · ') : 'No glider is out.';
   }
 
+  // ---- satellite SST / chlorophyll: one image per glider box and day
+  const CMAPS = __CMAPS__;
+  const SATV = { sst: { name: 'SST', unit: '°C', dig: 1 }, chl: { name: 'Chlorophyll', unit: 'mg m⁻³', dig: 2 } };
+  const satDayEl = document.getElementById('satDay');
+  let SAT = '';
+  const satDates = v => [...new Set(G.flatMap(g => g.sat && g.sat[v] ? g.sat[v].days.map(d => d.date) : []))].sort();
+  const fmtDate = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  function fillSatDays() {
+    const ds = satDates(SAT || 'sst').length ? satDates(SAT || 'sst') : satDates('chl');
+    const keep = satDayEl.value;
+    satDayEl.innerHTML = ds.map(d => `<option value="${d}">${fmtDate(d)}</option>`).join('');
+    satDayEl.value = ds.includes(keep) ? keep : (ds[ds.length - 1] || '');
+    satDayEl.disabled = !SAT || !ds.length;
+  }
+  const satDay = (g, v) => { const b = g.sat && g.sat[v]; if (!b) return null;
+    return b.days.find(d => d.date === satDayEl.value) || null; };
+  function drawSat() {
+    satLayer.clearLayers();
+    const notes = [];
+    if (SAT) G.forEach(g => {
+      const b = g.sat && g.sat[SAT];
+      if (!b) { notes.push(`${g.name}: no ${SATV[SAT].name.toLowerCase()} data`); return; }
+      const d = satDay(g, SAT);
+      if (!d) { notes.push(`${g.name}: no image for this day`); return; }
+      L.imageOverlay(d.img.startsWith('http') ? d.img : '../currents/' + d.img, b.bounds, { pane: 'sat', opacity: 1, interactive: false }).addTo(satLayer);
+      if (b.note) notes.push(`${g.name}: ${b.note}`);
+      if (d.observedFrac != null) notes.push(`${g.name}: ${(100 * d.observedFrac).toFixed(0)}% of the box observed that day`);
+    });
+    document.getElementById('satNote').textContent = SAT ? (notes.join(' · ') ||
+      (SAT === 'chl' ? 'Opaque = a satellite saw it that day; faint = filled by interpolation (clouds).' : 'Gap-free analysis; clouds are filled from other days and sensors.')) : '';
+    satLegend();
+  }
+  const satLeg = L.control({ position: 'bottomleft' });
+  satLeg.onAdd = () => { const d = L.DomUtil.create('div', 'legend'); d.id = 'satLeg'; d.style.display = 'none'; return d; };
+  satLeg.addTo(map);
+  function satLegend() {
+    const el = document.getElementById('satLeg');
+    const gs = G.filter(g => SAT && g.sat && g.sat[SAT]);
+    if (!gs.length) { el.style.display = 'none'; return; }
+    const cm = SAT === 'chl' ? CMAPS.algae : CMAPS.thermal, v = SATV[SAT];
+    el.style.display = '';
+    el.innerHTML = `<b>Satellite ${SAT === 'sst' ? 'SST' : 'chlorophyll'}</b>${SAT === 'chl' ? ' (log scale)' : ''}` +
+      `<div class="ramp">${cm.map(c => `<span style="background:${c}"></span>`).join('')}</div>` +
+      gs.map(g => { const r = g.sat[SAT].range; return `<div>${esc(g.name)}: ${r[0].toFixed(v.dig)} → ${r[1].toFixed(v.dig)} ${v.unit}</div>`; }).join('') +
+      (SAT === 'chl' ? '<div class="muted">faint = interpolated under cloud</div>' : '');
+  }
+
   // ---- gliders
   const list = document.getElementById('gliders');
   if (G.length) list.textContent = '';
@@ -260,6 +316,19 @@ HTML = r"""<!DOCTYPE html>
       rows += `<tr><td colspan="2" style="padding-top:6px;color:inherit"><b>HF radar, last 24 h</b></td></tr>` +
               `<tr><td>Surface</td><td>${c >= 0 ? fmtCur([gr.u[c], gr.v[c]]) : '—'}</td></tr>`;
     }
+    if (g.sat || g.surface) {
+      const date = satDayEl.value, s = (g.surface || {})[date] || {};
+      rows += `<tr><td colspan="2" style="padding-top:6px;color:inherit"><b>Satellite vs glider, ${date ? esc(fmtDate(date)) : '—'}</b></td></tr>`;
+      const sd = satDay(g, 'sst'), cd = satDay(g, 'chl');
+      const at = (d, v) => !d || !d.atGlider ? '—' : `${d.atGlider.v.toFixed(SATV[v].dig)}` +
+        (d.atGlider.err != null ? ` ± ${d.atGlider.err.toFixed(1)}` : '') + ` ${SATV[v].unit}` +
+        (d.atGlider.observed === true ? ' (observed)' : d.atGlider.observed === false ? ' (interpolated, no clear view)' : '') +
+        (d.atGlider.fromGlider ? '' : ' <span class="muted">at latest fix</span>');
+      rows += `<tr><td>SST, satellite</td><td>${at(sd, 'sst')}</td></tr>` +
+              `<tr><td>Glider 0–5 m</td><td>${s.T != null ? s.T.toFixed(1) + ' °C' : '—'}${s.nProfiles ? ` <span class="muted">${s.nProfiles} profiles</span>` : ''}</td></tr>` +
+              `<tr><td>Chl, satellite</td><td>${at(cd, 'chl')}</td></tr>` +
+              `<tr><td>Glider 0–10 m, night</td><td>${s.chl != null ? s.chl.toFixed(2) + ' mg m⁻³' : s.nProfiles ? (s.nNight ? '—' : 'no night profiles') : '—'}${s.nNight ? ` <span class="muted">${s.nNight} profiles</span>` : ''}</td></tr>`;
+    }
     if (g.dac) {
       const d = g.dac, n = d.u ? d.u.length - 1 : -1;
       rows += `<tr><td colspan="2" style="padding-top:6px;color:inherit"><b>Glider-measured, depth-averaged</b></td></tr>` +
@@ -288,6 +357,7 @@ HTML = r"""<!DOCTYPE html>
   if (anyM('wcofs')) { const m = anyM('wcofs').wcofs; src.push(`Model: <a href="${m.doi}" target="_blank">${esc(m.source)}</a>, run of ${esc(m.run)}.`); }
   if (G.some(g => g.hfr)) src.push(`Observed: ${esc(G.find(g => g.hfr).hfr.source)}.`);
   if (G.some(g => g.dac && g.dac.status === 'ok')) src.push('Glider-measured: u and v from each real-time dataset on the IOOS Glider DAC.');
+  ['sst', 'chl'].forEach(v => { const g = G.find(g => g.sat && g.sat[v]); if (g) src.push(`Satellite: <a href="${g.sat[v].url}" target="_blank">${esc(g.sat[v].source)}</a>.`); });
   if (C.made) src.push(`Updated ${esc(C.made)} by the daily site build.`);
   document.getElementById('sources').innerHTML = src.join('<br>');
 
@@ -295,9 +365,11 @@ HTML = r"""<!DOCTYPE html>
   document.getElementById('mOn').onchange = drawModel;
   document.getElementById('hOn').onchange = drawHfr;
   document.getElementById('dOn').onchange = drawDac;
+  document.querySelectorAll('input[name=sat]').forEach(r => r.onchange = () => { SAT = r.value; fillSatDays(); drawSat(); });
+  satDayEl.onchange = drawSat;
   document.getElementById('tOn').onchange = e => e.target.checked ? tracks.addTo(map) : map.removeLayer(tracks);
   if (!models.length) { document.getElementById('dayLabel').textContent = 'no model data'; document.getElementById('depthLabel').textContent = '—'; }
-  drawModel(); drawHfr(); drawDac();
+  fillSatDays(); drawModel(); drawHfr(); drawDac(); drawSat();
   if (wantG) { const k = G.findIndex(g => g.name === wantG); if (k >= 0) list.children[k].click(); }
 })();
 </script>
@@ -307,4 +379,6 @@ HTML = r"""<!DOCTYPE html>
 
 def write_map(out_dir):
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
-    (out / "index.html").write_text(HTML, encoding="utf-8")
+    import json
+    from fetch_satellite import CMAPS
+    (out / "index.html").write_text(HTML.replace("__CMAPS__", json.dumps(CMAPS)), encoding="utf-8")

@@ -3,3 +3,4 @@ numpy
 contourpy
 plotly
 copernicusmarine
+pillow

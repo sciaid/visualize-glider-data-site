@@ -128,7 +128,10 @@ writes `currents/currents.json` (not committed): Copernicus Marine model current
 model currents and HF radar surface currents for the last 24 h, and the glider's own
 depth-averaged currents for the last 7 days (`u`, `v` from the real-time dataset, which
 `fetch_erddap.py` keeps in each real-time grid as `dac_u`, `dac_v`, ...; values that cannot be
-real, such as `u` equal to `v` for every dive, are left off with a note). `realtime_map/index.html` (written by `build_site.py` from
+real, such as `u` equal to `v` for every dive, are left off with a note). `scripts/fetch_satellite.py`
+(called from the same step) adds satellite SST (MUR, CoastWatch ERDDAP) and chlorophyll
+(Copernicus-GlobColour gap-free and observed-only) images around each glider for the last 7 days,
+plus the satellite value at the glider beside its 0–5 m temperature and 0–10 m night chlorophyll. `realtime_map/index.html` (written by `build_site.py` from
 `scripts/currents_map.py`) draws them, with day and depth sliders.
 
 The model layer needs a free Copernicus Marine account

@@ -40,6 +40,8 @@ from pathlib import Path
 import numpy as np
 import netCDF4
 
+import fetch_satellite as sat
+
 MODEL_DATASET = "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m"      # daily mean uo, vo on depth levels
 MODEL_NAME = "Copernicus Marine global analysis and forecast (1/12°, daily means)"
 MODEL_DOI = "https://doi.org/10.48670/moi-00016"
@@ -136,7 +138,8 @@ def gliders(cache):
                         "diveDepth": dive,
                         "track": {"t": [int(x) for x in t[::step]], "lat": [round(float(x), 4) for x in la[::step]],
                                   "lon": [round(float(x), 4) for x in lo[::step]]},
-                        "dac": glider_dac(ds, now)})
+                        "dac": glider_dac(ds, now),
+                        "surface": sat.glider_surface(ds, now)})
     return out
 
 
@@ -446,6 +449,22 @@ def main(argv=None):
                 except Exception as exc:
                     traceback.print_exc()
                     result["notes"].append(f"{g['name']}: HF radar failed ({type(exc).__name__}).")
+            for var, fn, need_cm in (("sst", sat.sst_layer, False), ("chl", sat.chl_layer, True)):
+                if need_cm and not have_cm:
+                    continue
+                try:
+                    g.setdefault("sat", {})[var] = b = isolated(fn, g, box(g), out, tmp)
+                    at = [d for d in b["days"] if "atGlider" in d]
+                    last = at[-1] if at else None
+                    print(f"    satellite {var}: {len(b['days'])} days, colour range {b['range']}"
+                          + (f", at glider {last['date']}: {last['atGlider']['v']}" + (
+                              f" (observed)" if last['atGlider'].get('observed') else
+                              " (interpolated)" if last['atGlider'].get('observed') is False else "")
+                             + f", glider {g['surface'].get(last['date'], {}).get('T' if var == 'sst' else 'chl')}"
+                             if last else "") + (f"; {b['note']}" if b.get("note") else ""))
+                except Exception as exc:
+                    traceback.print_exc()
+                    result["notes"].append(f"{g['name']}: satellite {'SST' if var == 'sst' else 'chlorophyll'} failed ({type(exc).__name__}).")
             result["gliders"].append(g)
             write_result(out, dict(result, gliders=result["gliders"] + gs[len(result["gliders"]):]))
     write_result(out, result)
