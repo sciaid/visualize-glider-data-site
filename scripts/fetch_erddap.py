@@ -352,7 +352,7 @@ def main(argv=None):
         days = (now - since).total_seconds() / 86400
         if days < MISSING_GRACE_DAYS:
             print(f"  {dep:28s} not in the ERDDAP listing (since {m['missing_since']}); keeping it")
-            status.setdefault("warnings", []).append(f"{m["datasetID"]}: missing from the ERDDAP listing since {m['missing_since']}")
+            status.setdefault("warnings", []).append(f"{m['datasetID']}: missing from the ERDDAP listing since {m['missing_since']}")
             chosen[dep] = {"deployment": dep, "datasetID": m["datasetID"], "mode": m["mode"],
                            "maxTime": m["maxTime"]}
     local = {**locked_deployments(a.repo_index, cfg["replace_local_with_erddap"]),
