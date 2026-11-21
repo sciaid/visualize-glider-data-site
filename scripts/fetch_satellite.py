@@ -17,7 +17,8 @@ field is drawn on the map; the observed-only (L3) field on the same grid says wh
 satellite actually saw that day. On the map observed pixels are opaque and interpolated ones
 faint; at the glider the value is taken from observed pixels where there are any.
 
-Glider values: temperature is the mean of the 0-5 m bin over the day's profiles; chlorophyll is
+Glider values: temperature is the mean of the 0-5 m bin over the day's profiles (0-10 m on days
+with no data above 5 m, as in decimated real-time files); chlorophyll is
 the mean of the 0-10 m bins over the day's night profiles (sun below the horizon), because
 daytime fluorescence is lowered by non-photochemical quenching.
 """
@@ -34,6 +35,7 @@ SAT_DAYS = 7
 MATCH_KM = 5.0              # satellite pixels within this distance of the glider's position
 NIGHT_SUN_ELEV = 0.0        # degrees; profiles with the sun below this count as night
 T_DEPTH, CHL_DEPTH = 5.0, 10.0
+T_DEPTH_FALLBACK = 10.0     # real-time files often have no samples above ~6 m (decimated data)
 
 MUR_ERDDAP = "https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41"
 MUR_NAME = "MUR SST v4.1 (NASA JPL, 0.01°, daily, gap-free), via NOAA CoastWatch ERDDAP"
@@ -99,6 +101,7 @@ def glider_surface(ds, now):
         return np.where(use, prof, np.nan)
 
     T = col_mean("temperature", T_DEPTH, keep)
+    T10 = col_mean("temperature", T_DEPTH_FALLBACK, keep)
     C = col_mean("chlorophyll", CHL_DEPTH, keep & night)
     days = np.array([dt.datetime.fromtimestamp(x, dt.timezone.utc).date().isoformat() if k else ""
                      for x, k in zip(t, keep)])
@@ -108,7 +111,9 @@ def glider_surface(ds, now):
         rec = {"lat": round(float(np.median(la[m])), 4), "lon": round(float(np.median(lo[m])), 4),
                "nProfiles": int(m.sum()), "nNight": int((m & night).sum())}
         if T is not None and np.isfinite(T[m]).any():
-            rec["T"] = round(float(np.nanmean(T[m])), 2)
+            rec["T"], rec["Tdepth"] = round(float(np.nanmean(T[m])), 2), T_DEPTH
+        elif T10 is not None and np.isfinite(T10[m]).any():           # no data above 5 m that day
+            rec["T"], rec["Tdepth"] = round(float(np.nanmean(T10[m])), 2), T_DEPTH_FALLBACK
         mn = m & night
         if C is not None and np.isfinite(C[mn]).any():
             rec["chl"] = round(float(np.nanmean(C[mn])), 3)

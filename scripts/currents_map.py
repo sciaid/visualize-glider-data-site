@@ -325,7 +325,7 @@ HTML = r"""<!DOCTYPE html>
         (d.atGlider.observed === true ? ' (observed)' : d.atGlider.observed === false ? ' (interpolated, no clear view)' : '') +
         (d.atGlider.fromGlider ? '' : ' <span class="muted">at latest fix</span>');
       rows += `<tr><td>SST, satellite</td><td>${at(sd, 'sst')}</td></tr>` +
-              `<tr><td>Glider 0–5 m</td><td>${s.T != null ? s.T.toFixed(1) + ' °C' : '—'}${s.nProfiles ? ` <span class="muted">${s.nProfiles} profiles</span>` : ''}</td></tr>` +
+              `<tr><td>Glider 0–${s.Tdepth || 5} m</td><td>${s.T != null ? s.T.toFixed(1) + ' °C' : '—'}${s.nProfiles ? ` <span class="muted">${s.nProfiles} profiles</span>` : ''}</td></tr>` +
               `<tr><td>Chl, satellite</td><td>${at(cd, 'chl')}</td></tr>` +
               `<tr><td>Glider 0–10 m, night</td><td>${s.chl != null ? s.chl.toFixed(2) + ' mg m⁻³' : s.nProfiles ? (s.nNight ? '—' : 'no night profiles') : '—'}${s.nNight ? ` <span class="muted">${s.nNight} profiles</span>` : ''}</td></tr>`;
     }
