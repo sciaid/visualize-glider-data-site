@@ -63,6 +63,7 @@ DAC_VARS = ["u", "v", "time_uv", "lat_uv", "lon_uv"]
 # Grid file layout version, per data mode (only real-time grids hold samples and dac_* variables,
 # so a change to those does not force every delayed grid to download again).
 FORMAT = {"realtime": 4, "delayed": 3}
+MISSING_GRACE_DAYS = 3     # keep a deployment this long after it disappears from the ERDDAP listing
 BATHY_KEYS = ("gebco", "etopo", "bathy")
 ID_RE = re.compile(r"^(?P<base>.+?-\d{8})T\d{4}(?P<delayed>-delayed)?$")
 
@@ -337,6 +338,23 @@ def main(argv=None):
         print(f"ERDDAP listing failed ({exc}); keeping existing grids unchanged.")
         save_status()
         return 0
+    # ERDDAP sometimes lists only part of its datasets for a while (e.g. while reloading). A
+    # deployment we already have that is missing from the listing is kept, unchanged, until it
+    # has been missing for MISSING_GRACE_DAYS; only then is its grid removed.
+    now = dt.datetime.now(dt.timezone.utc)
+    for dep, m in list(manifest.items()):
+        if dep in chosen:
+            m.pop("missing_since", None)
+            continue
+        if not (out_dir / m.get("file", "-")).exists():
+            continue
+        since = dt.datetime.fromisoformat(m.setdefault("missing_since", now.isoformat(timespec="seconds")))
+        days = (now - since).total_seconds() / 86400
+        if days < MISSING_GRACE_DAYS:
+            print(f"  {dep:28s} not in the ERDDAP listing (since {m['missing_since']}); keeping it")
+            status.setdefault("warnings", []).append(f"{m["datasetID"]}: missing from the ERDDAP listing since {m['missing_since']}")
+            chosen[dep] = {"deployment": dep, "datasetID": m["datasetID"], "mode": m["mode"],
+                           "maxTime": m["maxTime"]}
     local = {**locked_deployments(a.repo_index, cfg["replace_local_with_erddap"]),
              **{k: Path(v).name for k, v in local_deployments(root, out_dir).items()}}
     print(f"{len(chosen)} deployments on ERDDAP; {len(local)} published from local files")
