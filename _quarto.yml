@@ -30,8 +30,9 @@ website:
       - href: methods.qmd
         text: Methods
   page-footer:
-    # last commit to this repository (shields.io badge, updated live)
-    right: "[![last commit](https://img.shields.io/github/last-commit/sciaid/visualize-glider-data-site)](https://github.com/sciaid/visualize-glider-data-site/commits/main)"
+    # last commit to this repository (shields.io badge, updated live). Raw HTML: a Markdown image on
+    # its own becomes a figure, and its alt text was shown again under it as a caption.
+    right: '<a href="https://github.com/sciaid/visualize-glider-data-site/commits/main"><img src="https://img.shields.io/github/last-commit/sciaid/visualize-glider-data-site" alt="last commit" style="vertical-align:middle"></a>'
     center: "Glider data: NOAA SWFSC Ecosystem Science Division Glider Team (CC0-1.0), via the IOOS Glider Data Assembly Center. Bathymetry: GEBCO_2026 Grid. Ocean currents: generated using E.U. Copernicus Marine Service Information; NOAA WCOFS; HF radar from CORDC/Scripps via NOAA CoastWatch; glider depth-averaged currents via the IOOS Glider DAC; MUR SST (NASA JPL) via NOAA CoastWatch; Copernicus-GlobColour chlorophyll."
 
 format:
