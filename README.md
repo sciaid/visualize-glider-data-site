@@ -113,10 +113,12 @@ git push
 
 - `echo.json` maps each deployment to its `.ad2` folder; add a line per new deployment.
   One deployment at a time: `python scripts/echo_ad2.py "<ad2 folder>" amlr08-20261119`.
-- Each run rebuilds `echo/<deployment>_echo.nc` from every `.ad2` file in the folder (repeated
-  profiles are dropped). With no new data the file comes out byte-identical, so there is nothing
-  to commit and the site does not rebuild that deployment. A folder with no echo data yet is
-  skipped with a note.
+- Each run rebuilds `echo/<deployment>_echo.nc` from every `.ad2` file in the folder. The glider
+  sometimes sends a profile again (it can re-send its whole backlog), and the re-sent copy can differ
+  slightly; records within 2 minutes are treated as one profile and the copy with the most depth
+  bins with data is kept. Differing copies are listed when the script runs.
+- With no new data the file comes out byte-identical, so there is nothing to commit and the site
+  does not rebuild that deployment. A folder with no echo data yet is skipped with a note.
 - Calibration offsets (Echoview Calibration Assistant) and calibration dates are in `CAL_TABLE`
   at the top of `scripts/echo_ad2.py`, by instrument serial number.
 - The deployment name must match the site's (the ERDDAP dataset ID without the `Thhmm` time),
