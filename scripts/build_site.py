@@ -172,6 +172,8 @@ def fmt_sensors(e):
     out = ", ".join(parts)
     if e.get("absent"):
         out += " · not measured: " + ", ".join(e["absent"])
+    if e.get("echo"):
+        out += f" · echosounder: Sv 70 and 120 kHz ({e.get('echoProfiles', 0)} descent profiles; select it in the curtain)"
     return out
 
 
@@ -552,17 +554,21 @@ def main():
     idx_path = data_dir / "index.json"
     index = json.loads(idx_path.read_text()) if idx_path.exists() else []
 
-    # 1. Which files need (re)processing?
+    # 1. Which files need (re)processing? (a new or changed echo file counts as a change)
+    meta = {f: file_meta(f) for f in files}
     fps = {f: fingerprint(f) for f in files}
+    echo_fps = {}
+    for f in files:
+        ep = glider_curtain.echo_file(meta[f]["name"])
+        echo_fps[f] = fingerprint(ep) if ep else None
     known = {e.get("file"): e for e in index if e.get("file")}
     todo = [f for f in files
             if a.force or Path(f).name not in known
             or known[Path(f).name].get("fingerprint") != fps[f]
+            or known[Path(f).name].get("echoFingerprint") != echo_fps[f]
             or not (data_dir / f"{known[Path(f).name]['name']}.json").exists()]
     print(f"{len(files)} glider files; {len(todo)} new or changed"
           + (" (--force)" if a.force else "") + f"; {len(files) - len(todo)} unchanged")
-
-    meta = {f: file_meta(f) for f in files}
 
     # 2. Overview map (always rebuilt from all files: a single small page)
     print("\n== Overview map ==")
@@ -594,6 +600,7 @@ def main():
         if e.get("file") in by_file:
             f = by_file[e["file"]]
             e["fingerprint"] = fps[f]
+            e["echoFingerprint"] = echo_fps[f]
             for k in ("project", "projectFull", "mode", "sourceDataset", "sourceUrl", "modified"):
                 e[k] = meta[f][k]
         la = (e["latRange"][0] + e["latRange"][1]) / 2
