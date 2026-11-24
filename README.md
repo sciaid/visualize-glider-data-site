@@ -24,6 +24,7 @@ GitHub builds and publishes the site automatically every time you push to `main`
 | `viewer/index.html`, `viewer/plotly.min.js` | shared 3D curtain viewer (generated) |
 | `viewer/data/*.json` | one data file per deployment (generated) |
 | `scripts/` | Python that generates the files above from the NetCDF files |
+| `echo/*_echo.nc`, `echo.json` | echosounder layer per deployment (from `scripts/echo_ad2.py`) |
 
 The NetCDF files and the GEBCO grid are **not** stored here; only the generated data is.
 
@@ -94,6 +95,34 @@ python scripts/build_site.py  "C:\Claude_work\PROJECTS\Glider L-3 ncfiles"
 
 Files under the folder that are not depth × profile grids (e.g. a raw ERDDAP download) are
 skipped by the build with a note.
+
+### Echosounder layer (Nortek Signature 100, real-time)
+
+Gliders with a compact echosounder send `.ad2` files home with each surfacing. The curtain shows
+their calibrated Sv at 70 and 120 kHz as a separate **Echosounder** layer (its own descent
+profiles, placed along the deployment's track by time).
+
+Daily, on the computer with the `.ad2` files (internet needed for the glider track):
+
+```
+python scripts/echo_ad2.py --all
+git add echo
+git commit -m "Update echosounder layer"
+git push
+```
+
+- `echo.json` maps each deployment to its `.ad2` folder; add a line per new deployment.
+  One deployment at a time: `python scripts/echo_ad2.py "<ad2 folder>" amlr08-20261119`.
+- Each run rebuilds `echo/<deployment>_echo.nc` from every `.ad2` file in the folder (repeated
+  profiles are dropped). With no new data the file comes out byte-identical, so there is nothing
+  to commit and the site does not rebuild that deployment. A folder with no echo data yet is
+  skipped with a note.
+- Calibration offsets (Echoview Calibration Assistant) and calibration dates are in `CAL_TABLE`
+  at the top of `scripts/echo_ad2.py`, by instrument serial number.
+- The deployment name must match the site's (the ERDDAP dataset ID without the `Thhmm` time),
+  e.g. `amlr08-20261119` for `amlr08-20261119T2159`.
+- `python scripts/echo_plot.py echo/amlr08-20261119_echo.nc` writes echograms (70 kHz, 120 kHz,
+  120 − 70 kHz) to a PNG next to the file (needs `matplotlib`).
 
 ### Regions
 

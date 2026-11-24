@@ -3,6 +3,7 @@
 __pycache__/
 *.nc
 !bathymetry/*.nc
+!echo/*.nc
 *.pdf
 /.erddap-cache/
 

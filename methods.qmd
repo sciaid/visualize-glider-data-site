@@ -66,6 +66,34 @@ window, with σθ isopycnals computed from the EOS-80 equation of state (Millero
 1981). EOS-80 matches the files' potential density to within about 0.006 kg m⁻³ and is
 used only to draw the isopycnals.
 
+## Echosounder
+
+Gliders carrying a Nortek Signature 100 compact echosounder send home a small telemetry
+product with each surfacing (`.ad2` files): for each descent, the instrument's own processing
+(`GETTMECHO`, data format 41) averages volume backscattering strength (Sv) into 5 m depth bins
+from 0 to 300 m. `scripts/echo_ad2.py` decodes these records directly from the `.ad2` files
+(checked bit-for-bit against Nortek MIDAS exports), keeps the 70 and 120 kHz channels, and
+writes one file per deployment, `echo/<deployment>_echo.nc`, which the curtain picks up as a
+separate **Echosounder** layer.
+
+- **Calibration.** Sv is shown calibrated: the instrument value plus an offset per frequency
+  from the Echoview Calibration Assistant (standard-sphere tank calibration; the offsets and
+  calibration date are recorded in each file). The uncalibrated values are kept in the file.
+- **Its own profiles.** The echosounder reports one profile per descent (about one every
+  3 h), not one per CTD profile, so the layer has its own time axis. Each echo profile is
+  placed by interpolating in time along the deployment's track, the same positions the CTD
+  curtain uses. Pauses of more than 4 h between echo profiles are left blank on the section;
+  the 3D surface is broken at pauses over 8 h.
+- **Bins.** The instrument labels its bins 0, 5, … 295 m; they are treated as [z, z+5) and
+  shown at their centres (2.5 … 297.5 m), the same layout as the CTD grid. The top two bins
+  are blanked by the instrument. Profiles stop at the dive's maximum depth when it is
+  shallower than 300 m.
+- **Reading the values.** No noise estimate is removed on the instrument, and much of each
+  profile below the near-surface layer sits at the noise floor, which rises with range. Treat
+  weak, smooth backscatter as noise; the dB difference Sv(120) − Sv(70) is only meaningful in
+  bins well above it. The readout gives both frequencies, their difference, and the nearest
+  CTD profile's values at that depth.
+
 ## Derived quantities
 
 **Mixed-layer depth** — the depth where σθ first exceeds its value at 10 m by
@@ -245,7 +273,9 @@ before any colon.
 
 cmocean perceptually uniform colour maps (Thyng et al. 2016): *thermal* for temperature,
 *haline* for salinity, *algae* for chlorophyll (log scale by default), *deep* for oxygen,
-*matter* for CDOM and *turbid* for 700 nm backscatter (log scale by default).
+*matter* for CDOM and *turbid* for 700 nm backscatter (log scale by default). Echosounder Sv uses a
+single-hue blue ramp (light = weak, dark = strong backscatter), with one colour range shared by
+both frequencies so they can be compared directly.
 
 ## References
 

@@ -46,6 +46,9 @@ except ImportError:  # pragma: no cover
     sys.exit("netCDF4 is required:  pip install netCDF4 numpy")
 
 PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.35.2.min.js"
+ECHO_DIR = Path(__file__).resolve().parent.parent / "echo"     # <deployment>_echo.nc from echo_ad2.py
+# Echosounder layer: variables shown (calibrated Sv), with their labels
+ECHO_VARS = {"sv_70khz": "Sv 70 kHz", "sv_120khz": "Sv 120 kHz"}
 
 # Display defaults per variable: (label, colour map, log scale)
 VAR_DEFAULTS = {
@@ -77,6 +80,8 @@ CMAPS = {
     "turbid": ["#e9f6ab", "#dbd987", "#cfbc66", "#c4a14d", "#b58740", "#a1703b", "#8a5e3a", "#704d37", "#563e30", "#3b2f27", "#221f1b"],
     "tempo": ["#fff6f4", "#d8ddcb", "#b1c6a6", "#87b08d", "#5d9b7f", "#348378", "#1c6b6f", "#185263", "#183b52", "#162540", "#151d44"],
     "viridis": ["#440154", "#482878", "#3e4989", "#31688e", "#26828e", "#1f9e89", "#35b779", "#6ece58", "#b5de2b", "#fde725", "#fde725"],
+    # one-hue blue ramp, light -> dark, for echosounder Sv (stronger backscatter = darker)
+    "blues": ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#1c5cab", "#104281", "#0d366b"],
     # jet-style rainbow, offered because many glider portals default to it; not perceptually uniform
     "rainbow": ["#00007f", "#0000ff", "#0063ff", "#00d4ff", "#4effa9", "#a9ff4e", "#ffe600", "#ff7a00", "#ff1400", "#b20000", "#7f0000"],
 }
@@ -91,7 +96,7 @@ def _b64(a):
     return base64.b64encode(np.ascontiguousarray(a, dtype="<f4").tobytes()).decode("ascii")
 
 
-def load(path, var_names, profile_step, bathy=None):
+def load(path, var_names, profile_step, bathy=None, echo_dir=None):
     ds = netCDF4.Dataset(path)
     for need in ("time", "latitude", "longitude", "depth"):
         if need not in ds.variables:
@@ -158,6 +163,9 @@ def load(path, var_names, profile_step, bathy=None):
         "vars": [], "absent": absent,
     }
     data["aux"] = derived_block(ds, idx, depth, nd, t[idx], lat[idx], lon[idx])
+    echo = echo_block(name, echo_dir, t[idx], lat[idx], lon[idx], lat0, lon0, kx)
+    if echo:
+        data["echo"] = echo
     grids = bathy if isinstance(bathy, (list, tuple)) else ([bathy] if bathy is not None else [])
     grid = pick_bathy(grids, lat[idx], lon[idx]) if grids else None
     if grid is not None:
@@ -184,6 +192,62 @@ def load(path, var_names, profile_step, bathy=None):
             data["samples"] = smp
     ds.close()
     return data
+
+
+def echo_file(name, echo_dir=None):
+    p = Path(echo_dir or ECHO_DIR) / f"{name}_echo.nc"
+    return p if p.exists() else None
+
+
+def echo_block(name, echo_dir, t, lat, lon, lat0, lon0, kx, max_gap=6 * 3600):
+    """Echosounder layer from echo/<name>_echo.nc (echo_ad2.py): its own profile axis, placed by
+    interpolating in time along this deployment's track (the same positions as the curtain)."""
+    p = echo_file(name, echo_dir)
+    if p is None:
+        return None
+    e = netCDF4.Dataset(p)
+    te = _f(e["time"]); ze = _f(e["depth"])
+    keep = np.isfinite(te) & (te >= t[0] - max_gap) & (te <= t[-1] + max_gap)
+    if not keep.any():
+        print(f"  note: {p.name} has no profiles within this deployment's track; echo layer skipped")
+        e.close()
+        return None
+    te = te[keep]
+    o = np.argsort(te, kind="stable"); te = te[o]
+    la = np.interp(te, t, lat); lo = np.interp(te, t, lon)
+    arrs = {}
+    for v, label in ECHO_VARS.items():
+        if v in e.variables:
+            a = _f(e[v])
+            a = (a.T if a.shape == (keep.size, ze.size) else a)[:, keep][:, o]
+            if np.isfinite(a).any():
+                arrs[v] = (label, a, e[v])
+    if not arrs:
+        e.close()
+        return None
+    rows = np.where(np.any([np.isfinite(a).any(axis=1) for _, a, _ in arrs.values()], axis=0))[0]
+    nd = int(rows.max()) + 1
+    pooled = np.concatenate([a[:nd][np.isfinite(a[:nd])] for _, a, _ in arrs.values()])
+    lo1, hi1 = np.percentile(pooled, [1, 99])                     # one colour range for both frequencies
+    rng = [float(f"{lo1:.4g}"), float(f"{hi1:.4g}")]
+    out = {
+        "nProf": int(te.size), "nDepth": nd,
+        "depth": [round(float(d), 2) for d in ze[:nd]],
+        "time": [int(round(float(s))) for s in te],
+        "lat": [round(float(s), 5) for s in la], "lon": [round(float(s), 5) for s in lo],
+        "x": _b64((lo - lon0) * kx), "y": _b64((la - lat0) * 110.57),
+        "meta": {k: str(getattr(e, k)) for k in ("instrument", "instrument_serial_number", "calibration_date",
+                                                  "calibration_source", "processing") if hasattr(e, k)},
+        "file": p.name,
+        "vars": [],
+    }
+    for v, (label, a, var) in arrs.items():
+        out["vars"].append({"name": v, "label": label, "units": "dB", "cmap": "blues", "log": False,
+                            "range": rng, "logRange": rng, "data": _b64(a[:nd]),
+                            "freq": float(getattr(var, "frequency_khz", np.nan))})
+    e.close()
+    print(f"  echo layer: {te.size} profiles from {p.name} ({', '.join(out['vars'][i]['label'] for i in range(len(out['vars'])))})")
+    return out
 
 
 def samples_block(ds, idx, t, lat0, lon0, kx, var_names):
@@ -536,7 +600,7 @@ def build_site(a, files, bathy):
         index = [e for e in json.loads(idx_path.read_text()) if (site / "data" / f"{e['name']}.json").exists()]
     for f in ([] if getattr(a, "viewer_only", False) else files):
         print(f)
-        d = load(f, [s.strip() for s in a.vars.split(",") if s.strip()], a.profile_step, bathy)
+        d = load(f, [s.strip() for s in a.vars.split(",") if s.strip()], a.profile_step, bathy, a.echo_dir)
         (site / "data" / f"{d['name']}.json").write_text(json.dumps(d, separators=(",", ":")), encoding="utf-8")
         start = dt.datetime.fromtimestamp(d["time"][0], dt.timezone.utc)
         end = dt.datetime.fromtimestamp(d["time"][-1], dt.timezone.utc)
@@ -547,6 +611,7 @@ def build_site(a, files, bathy):
                  "glider": d["meta"].get("glider_name", ""),
                  "latRange": [min(d["lat"]), max(d["lat"])], "lonRange": [min(d["lon"]), max(d["lon"])],
                  "bathy": bool(d.get("bathy")),
+                 "echo": bool(d.get("echo")), "echoProfiles": (d.get("echo") or {}).get("nProf", 0),
                  "distanceKm": round(track_distance_km(d["lat"], d["lon"]), 1),
                  "days": round((d["time"][-1] - d["time"][0]) / 86400, 2)}
         index = [e for e in index if e["name"] != d["name"]] + [entry]
@@ -571,6 +636,8 @@ def main(argv=None):
                          "deployment (DIR/data/<name>.json) for a website, instead of standalone pages")
     ap.add_argument("--viewer-only", action="store_true",
                     help="with --site: only rewrite the shared viewer page, no data files")
+    ap.add_argument("--echo-dir", default=str(ECHO_DIR),
+                    help="folder with <deployment>_echo.nc files from echo_ad2.py (default: %(default)s)")
     ap.add_argument("--bathy", default="auto",
                     help="GEBCO/ETOPO NetCDF grid(s) for seafloor + land, comma-separated; 'auto' finds every "
                          "*gebco*/*etopo*/*bathy*.nc next to the glider files or one folder down and uses "
@@ -592,7 +659,7 @@ def main(argv=None):
         return build_site(a, files, bathy)
     for f in files:
         print(f"{f}")
-        data = load(f, [s.strip() for s in a.vars.split(",") if s.strip()], a.profile_step, bathy)
+        data = load(f, [s.strip() for s in a.vars.split(",") if s.strip()], a.profile_step, bathy, a.echo_dir)
         html = (HTML.replace("__PLOTLY__", tag)
                 .replace("__CMAPS__", json.dumps(CMAPS))
                 .replace("__TITLE__", data["name"])
@@ -646,6 +713,11 @@ __PLOTLY__
   <h2>Variable</h2>
   <div class="seg" id="vars"></div>
   <div class="muted" id="absent" style="margin-top:4px"></div>
+  <div id="echoCtl" style="display:none">
+    <h2>Echosounder</h2>
+    <div class="seg" id="evars"></div>
+    <div class="muted" id="echoNote" style="margin-top:4px"></div>
+  </div>
 
   <h2>Colour</h2>
   <label class="line">Map <select id="cmap"></select></label>
@@ -721,6 +793,12 @@ __PLOTLY__
   const f32 = b64 => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Float32Array(u.buffer); };
   const NP = D.nProf, ND = D.nDepth, X = f32(D.x), Y = f32(D.y);
   D.vars.forEach(v => { v.arr = f32(v.data); delete v.data; v.cmin = null; v.cmax = null; });
+  // Echosounder layer: its own profiles (time, position, depth bins), drawn on the same track.
+  const E = D.echo ? { np: D.echo.nProf, nd: D.echo.nDepth, depth: D.echo.depth, time: D.echo.time,
+                       lat: D.echo.lat, lon: D.echo.lon, X: f32(D.echo.x), Y: f32(D.echo.y),
+                       timesISO: D.echo.time.map(s => new Date(s * 1000).toISOString()), meta: D.echo.meta || {},
+                       vars: D.echo.vars.map(v => Object.assign(v, { arr: f32(v.data), data: undefined, cmin: null, cmax: null, echo: true })) } : null;
+  const ALLV = E ? D.vars.concat(E.vars) : D.vars;     // st.v indexes this list
   // Real-time deployments carry their individual samples (as transmitted): the points style plots those.
   const S = D.samples ? { n: D.samples.n, t0: D.samples.t0, t: f32(D.samples.t), d: f32(D.samples.depth),
                           x: f32(D.samples.x), y: f32(D.samples.y), p: f32(D.samples.prof),
@@ -731,7 +809,8 @@ __PLOTLY__
   const timesISO = D.time.map(s => new Date(s * 1000).toISOString());
 
   document.getElementById('title').textContent = D.name;
-  document.getElementById('sub').textContent = `${fmtD(D.time[0])} → ${fmtD(D.time[NP - 1])} · ${NP.toLocaleString()} profiles · ${D.depth[ND - 1]} m max`;
+  document.getElementById('sub').textContent = `${fmtD(D.time[0])} → ${fmtD(D.time[NP - 1])} · ${NP.toLocaleString()} profiles · ${D.depth[ND - 1]} m max`
+    + (E ? ` · echosounder: ${E.np} profiles` : '');
 
   const st = { v: 0, i0: 0, i1: NP - 1, ex: 0, track: true, bathy: !!D.bathy, clip: false };
   const B = D.bathy || null;
@@ -747,7 +826,8 @@ __PLOTLY__
   } else {
     document.getElementById('bathyCtl').innerHTML = '<div class="muted">No bathymetry grid found. Put a GEBCO/ETOPO .nc next to the glider files and rerun.</div>';
   }
-  const zBottom = () => -(B && st.bathy && !st.clip ? Math.max(D.depth[ND - 1], B.maxDepth) : D.depth[ND - 1]) * 1.02;
+  const dataMax = () => (window.__echoOn && window.__echoOn()) ? D.echo.depth[D.echo.nDepth - 1] + 2.5 : D.depth[ND - 1];
+  const zBottom = () => -(B && st.bathy && !st.clip ? Math.max(dataMax(), B.maxDepth) : dataMax()) * 1.02;
   const zTop = () => (B && st.bathy && !st.clip && B.maxLand > 0) ? B.maxLand * LAND_SCALE * 1.05 : 0;
   const A = D.aux || {};
   const SIG = A.sigma ? f32(A.sigma) : null, TH = A.theta ? f32(A.theta) : null, SAL = A.sal ? f32(A.sal) : null;
@@ -777,7 +857,13 @@ __PLOTLY__
   };
   const sunClass = e => e > -0.833 ? 3 : e > -6 ? 2 : e > -12 ? 1 : 0;
   const sunName = ['night', 'nautical twilight', 'civil twilight', 'day'];
-  const cur = () => D.vars[st.v];
+  const cur = () => ALLV[st.v];
+  window.__echoOn = () => !!cur().echo;
+  // Echo profiles inside the date window (the window is set in CTD profiles; matched by time)
+  const echoCols = () => { const a = D.time[st.i0], b = D.time[st.i1], c = []; for (let j = 0; j < E.np; j++) if (E.time[j] >= a && E.time[j] <= b) c.push(j); return c; };
+  // Columns for a heatmap with irregular times: blank columns are inserted in pauses so cells
+  // are not stretched across them (half-width at most EHALF either side of a profile).
+  const EHALF = 2 * 3600;
   window.__curVar = () => cur().name;     // the picker keeps the selected variable when switching deployment
   const scaleName = v => v.log ? `log₁₀ ${v.label}` : v.label;
   const tr = (v, x) => v.log ? (x > 0 ? Math.log10(x) : NaN) : x;
@@ -796,12 +882,30 @@ __PLOTLY__
     const b = document.createElement('button');
     const part = v.coverage != null && v.coverage < 0.9 ? ` <span class="u">· ${Math.max(1, Math.round(v.coverage * 100))}% of profiles</span>` : '';
     b.innerHTML = `${v.label} <span class="u">${v.units}</span>${part}`;
+    b.dataset.vi = i;
     b.onclick = () => { st.v = i; syncControls(); draw(); };
     varsEl.appendChild(b);
   });
+  if (E) {
+    document.getElementById('echoCtl').style.display = '';
+    const ev = document.getElementById('evars');
+    E.vars.forEach((v, j) => {
+      const b = document.createElement('button'), i = D.vars.length + j;
+      b.innerHTML = `${v.label} <span class="u">${v.units}</span>`;
+      b.dataset.vi = i;
+      b.onclick = () => { st.v = i; syncControls(); draw(); };
+      ev.appendChild(b);
+    });
+    const m = E.meta;
+    document.getElementById('echoNote').innerHTML =
+      `${E.np} descent profiles, 0–${Math.round(E.depth[E.nd - 1] + 2.5)} m, 5 m bins` +
+      (m.calibration_date ? ` · calibrated Sv (${m.calibration_source || 'calibration'} ${m.calibration_date})` : '') +
+      (m.instrument ? `<br>${m.instrument}${m.instrument_serial_number ? ' SN ' + m.instrument_serial_number : ''}` : '') +
+      '<br>Placed along the glider track by time.';
+  }
   if (D.absent && D.absent.length)
     document.getElementById('absent').textContent = `Not measured on this deployment: ${D.absent.map(a => a.label).join(', ')}.`;
-  { const want = new URLSearchParams(location.search).get('v'), j = D.vars.findIndex(v => v.name === want); if (j >= 0) st.v = j; }
+  { const want = new URLSearchParams(location.search).get('v'), j = ALLV.findIndex(v => v.name === want); if (j >= 0) st.v = j; }
   const cmapEl = document.getElementById('cmap');
   Object.keys(CMAPS).forEach(k => cmapEl.add(new Option(k, k)));
   cmapEl.onchange = () => { cur().cmap = cmapEl.value; draw(); };
@@ -841,7 +945,10 @@ __PLOTLY__
     st.style !== 'points' ? '' : S ? `Each point is one sample as transmitted (${S.n.toLocaleString()} samples; real-time data are thinned). Pauses are left blank.`
                                    : 'Each point is a 5 m bin mean; empty bins and time gaps are left blank.';
   styleNote();
-  styleEl.onchange = () => { st.style = styleEl.value; styleNote(); draw(true); };
+  styleEl.onchange = () => { st.style = styleEl.value; st.styleUser = true; styleNote(); draw(true); };
+  // The echo layer has few, widely spaced profiles: surface/heatmap (with pauses left blank) unless
+  // a style was chosen by hand.
+  const sty = v => v.echo && !st.styleUser && !askedStyle ? 'surface' : st.style;
   if (B) {
     document.getElementById('bathy').onchange = e => { st.bathy = e.target.checked; draw(true); };
     document.getElementById('clip').onchange = e => { st.clip = e.target.checked; draw(true); };
@@ -859,7 +966,7 @@ __PLOTLY__
   tsByEl.onchange = () => { st.tsBy = tsByEl.value; drawTS(); };
 
   function syncControls() {
-    [...varsEl.children].forEach((b, i) => b.classList.toggle('on', i === st.v));
+    document.querySelectorAll('[data-vi]').forEach(b => b.classList.toggle('on', +b.dataset.vi === st.v));
     const v = cur(); cmapEl.value = v.cmap; logEl.checked = v.log;
     const r = v.log ? v.logRange : v.range;
     cminEl.value = v.cmin ?? r[0]; cmaxEl.value = v.cmax ?? r[1];
@@ -895,17 +1002,30 @@ __PLOTLY__
   }
 
   let lastCols = null, pts3 = null, pts2 = null;
+  // The layer a variable lives on: the CTD grid, or the echosounder's own profiles.
+  const layerOf = v => v.echo ? { n: E.np, nd: E.nd, X: E.X, Y: E.Y, depth: E.depth } : { n: NP, nd: ND, X, Y, depth: D.depth };
   function draw(keepCamera) {
-    const v = cur(), cols = windowGrid(); lastCols = cols;
+    const v = cur(), cols = windowGrid(), L = layerOf(v), style = sty(v);
+    styleEl.value = style;
+    if (v.echo) document.getElementById('styleNote').textContent = style === 'points'
+      ? 'Each point is one 5 m echo bin.' : 'Echo layer: surface between descent profiles; pauses over 8 h are left blank.';
+    else styleNote();
+    let lcols = cols;
+    if (v.echo) {     // echo columns in the window; a -1 column (all NaN) breaks the surface at long pauses
+      const ec = echoCols(); lcols = [];
+      ec.forEach((j, q) => { if (q && E.time[j] - E.time[ec[q - 1]] > 4 * EHALF) lcols.push(-1); lcols.push(j); });
+    }
+    lastCols = lcols.filter(i => i >= 0);
     const [cmin, cmax] = crange(v);
-    const nc = cols.length;
+    const nc = lcols.length;
     const xs = [], ys = [], zs = [], cs = [];
-    for (let k = 0; k < ND; k++) {
+    for (let k = 0; k < L.nd; k++) {
       const xr = new Array(nc), yr = new Array(nc), zr = new Array(nc), cr = new Array(nc);
       for (let j = 0; j < nc; j++) {
-        const i = cols[j], val = v.arr[k * NP + i], c = tr(v, val);
-        xr[j] = X[i]; yr[j] = Y[i]; cr[j] = c;
-        zr[j] = Number.isFinite(c) ? -D.depth[k] : NaN;   // NaN z = hole in the curtain
+        let i = lcols[j], c = NaN;
+        if (i < 0) i = lcols[j - 1]; else c = tr(v, v.arr[k * L.n + i]);
+        xr[j] = L.X[i]; yr[j] = L.Y[i]; cr[j] = c;
+        zr[j] = Number.isFinite(c) ? -L.depth[k] : NaN;   // NaN z = hole in the curtain
       }
       xs.push(xr); ys.push(yr); zs.push(zr); cs.push(cr);
     }
@@ -918,7 +1038,7 @@ __PLOTLY__
       contours: { x: { highlight: false }, y: { highlight: false }, z: { highlight: false } },
     };
     let main3d = surf; pts3 = null;
-    if (st.style === 'points' && S && S.v[st.v]) {   // one marker per transmitted sample
+    if (style === 'points' && S && !v.echo && S.v[st.v]) {   // one marker per transmitted sample
       const px = [], py = [], pz = [], pc = [], vals = S.v[st.v];
       pts3 = [];
       for (let q = 0; q < S.n; q++) {
@@ -929,14 +1049,14 @@ __PLOTLY__
       main3d = { type: 'scatter3d', mode: 'markers', x: px, y: py, z: pz, hoverinfo: 'none',
         marker: { size: 2.2, color: pc, colorscale: colorscale(v), cmin, cmax, opacity: 1, line: { width: 0 },
                   colorbar: surf.colorbar, showscale: true } };
-    } else if (st.style === 'points') {     // one marker per bin that holds data
+    } else if (style === 'points' || lastCols.length < 2) {     // one marker per bin that holds data
       const px = [], py = [], pz = [], pc = [];
-      for (let k = 0; k < ND; k++) for (let j = 0; j < nc; j++) {
+      for (let k = 0; k < L.nd; k++) for (let j = 0; j < nc; j++) {
         const c = cs[k][j]; if (!Number.isFinite(c)) continue;
-        px.push(xs[k][j]); py.push(ys[k][j]); pz.push(-D.depth[k]); pc.push(c);
+        px.push(xs[k][j]); py.push(ys[k][j]); pz.push(-L.depth[k]); pc.push(c);
       }
       main3d = { type: 'scatter3d', mode: 'markers', x: px, y: py, z: pz, hoverinfo: 'none',
-        marker: { size: 2.2, color: pc, colorscale: colorscale(v), cmin, cmax, opacity: 1, line: { width: 0 },
+        marker: { size: v.echo ? 3.2 : 2.2, color: pc, colorscale: colorscale(v), cmin, cmax, opacity: 1, line: { width: 0 },
                   colorbar: surf.colorbar, showscale: true } };
     }
     const traces = [main3d];
@@ -998,17 +1118,49 @@ __PLOTLY__
 
   function niceDepths() { const m = -zBottom(), s = m > 4000 ? 1000 : m > 1500 ? 500 : m > 600 ? 200 : m > 250 ? 100 : 50, out = []; for (let d = 0; d <= m; d += s) out.push(d); return out; }
 
+  function echoSection(v) {     // echo heatmap columns, blank in pauses between profiles
+    const x = [], z = [], idx = [];
+    for (let k = 0; k < E.nd; k++) z.push([]);
+    const blank = s => { x.push(new Date(s * 1000).toISOString()); idx.push(-1); z.forEach(r => r.push(null)); };
+    for (let j = 0; j < E.np; j++) {
+      const t0 = E.time[j];
+      if (j && t0 - E.time[j - 1] > 2 * EHALF) blank(t0 - EHALF);
+      x.push(E.timesISO[j]); idx.push(j);
+      for (let k = 0; k < E.nd; k++) { const c = tr(v, v.arr[k * E.np + j]); z[k].push(Number.isFinite(c) ? c : null); }
+      if (j < E.np - 1 && E.time[j + 1] - t0 > 2 * EHALF) blank(t0 + EHALF);
+    }
+    return { x, z, idx };
+  }
+
   function draw2d(v, cmin, cmax, cbTitle) {
     // full deployment; the 3D window is shaded
     const step = Math.max(1, Math.ceil(NP / 3000));
     const cols = []; for (let i = 0; i < NP; i += step) cols.push(i);
-    const z = [];
-    for (let k = 0; k < ND; k++) { const r = new Array(cols.length); for (let j = 0; j < cols.length; j++) { const c = tr(v, v.arr[k * NP + cols[j]]); r[j] = Number.isFinite(c) ? c : null; } z.push(r); }
     const t = cols.map(i => timesISO[i]);
-    let trace = { type: 'heatmap', x: t, y: D.depth, z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
-                    showscale: false, hoverinfo: 'none', connectgaps: false };
+    let trace;
+    if (v.echo) {
+      const es = echoSection(v);
+      trace = { type: 'heatmap', x: es.x, y: E.depth, z: es.z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
+                showscale: false, hoverinfo: 'none', connectgaps: false };
+    } else {
+      const z = [];
+      for (let k = 0; k < ND; k++) { const r = new Array(cols.length); for (let j = 0; j < cols.length; j++) { const c = tr(v, v.arr[k * NP + cols[j]]); r[j] = Number.isFinite(c) ? c : null; } z.push(r); }
+      trace = { type: 'heatmap', x: t, y: D.depth, z, colorscale: colorscale(v), zmin: cmin, zmax: cmax,
+                showscale: false, hoverinfo: 'none', connectgaps: false };
+    }
     pts2 = null;
-    if (st.style === 'points' && S && S.v[st.v]) {   // transmitted samples
+    const style = sty(v);
+    if (v.echo && style === 'points') {      // echo bins as markers
+      const px = [], py = [], pc = [];
+      for (let k = 0; k < E.nd; k++) for (let j = 0; j < E.np; j++) {
+        const c = tr(v, v.arr[k * E.np + j]); if (!Number.isFinite(c)) continue;
+        px.push(E.timesISO[j]); py.push(E.depth[k]); pc.push(c);
+      }
+      trace = { type: 'scattergl', mode: 'markers', x: px, y: py, hoverinfo: 'none', showlegend: false,
+        marker: { size: 4, color: pc, colorscale: colorscale(v), cmin, cmax, line: { width: 0 } } };
+    } else if (v.echo) {
+      // heatmap already built
+    } else if (style === 'points' && S && S.v[st.v]) {   // transmitted samples
       const px = [], py = [], pc = [], vals = S.v[st.v];
       pts2 = [];
       for (let q = 0; q < S.n; q++) {
@@ -1017,8 +1169,8 @@ __PLOTLY__
       }
       trace = { type: 'scattergl', mode: 'markers', x: px, y: py, hoverinfo: 'none', showlegend: false,
         marker: { size: 3, color: pc, colorscale: colorscale(v), cmin, cmax, line: { width: 0 } } };
-    } else if (st.style === 'points') {     // same bins as markers: gaps stay blank
-      const px = [], py = [], pc = [];
+    } else if (style === 'points') {     // same bins as markers: gaps stay blank
+      const px = [], py = [], pc = [], z = trace.z;
       for (let k = 0; k < ND; k++) for (let j = 0; j < cols.length; j++) {
         if (z[k][j] == null) continue; px.push(t[j]); py.push(D.depth[k]); pc.push(z[k][j]);
       }
@@ -1029,7 +1181,8 @@ __PLOTLY__
       { type: 'rect', xref: 'x', yref: 'paper', x0: timesISO[0], x1: timesISO[st.i0], y0: 0, y1: 1, fillcolor: '#fcfcfb', opacity: 0.5, line: { width: 0 } },
       { type: 'rect', xref: 'x', yref: 'paper', x0: timesISO[st.i1], x1: timesISO[NP - 1], y0: 0, y1: 1, fillcolor: '#fcfcfb', opacity: 0.5, line: { width: 0 } },
     ] : [];
-    const yMax = st.secDepth ? Math.min(st.secDepth, D.depth[ND - 1] * 1.03) : D.depth[ND - 1] * 1.03, traces2 = [trace];
+    const dMax = v.echo ? E.depth[E.nd - 1] + 2.5 : D.depth[ND - 1] * 1.03;
+    const yMax = st.secDepth ? Math.min(st.secDepth, dMax) : dMax, traces2 = [trace];
     if (B) {
       const xs = [], ys = [];
       cols.forEach(i => { xs.push(timesISO[i]); ys.push(Number.isFinite(BOTTOM[i]) ? Math.min(BOTTOM[i], yMax) : yMax); });
@@ -1197,6 +1350,32 @@ __PLOTLY__
     });
     ro.classList.remove('muted'); ro.innerHTML = `<table>${rows}</table>`;
   }
+  function readoutEcho(j, k) {               // one echo bin, plus the nearest CTD profile at that depth
+    if (j == null || k == null || j < 0 || k < 0) return;
+    let rows = `<tr><td>Time</td><td>${fmtT(E.time[j])}</td></tr>
+      <tr><td>Lat, Lon</td><td>${E.lat[j].toFixed(4)}, ${E.lon[j].toFixed(4)}</td></tr>
+      <tr><td>Depth bin</td><td>${E.depth[k] - 2.5}–${E.depth[k] + 2.5} m</td></tr>`;
+    const val = (v) => v.arr[k * E.np + j];
+    E.vars.forEach(v => {
+      const x = val(v), on = ALLV[st.v] === v;
+      rows += `<tr><td${on ? ' style="color:var(--ink);font-weight:600"' : ''}>${v.label}</td><td>${Number.isFinite(x) ? x.toFixed(1) + ' ' + v.units : '—'}</td></tr>`;
+    });
+    if (E.vars.length === 2) {
+      const d = val(E.vars[1]) - val(E.vars[0]);
+      rows += `<tr><td>Sv 120 − 70</td><td>${Number.isFinite(d) ? d.toFixed(1) + ' dB' : '—'}</td></tr>`;
+    }
+    // nearest CTD profile in time, same depth bin
+    let lo = 0, hi = NP - 1; const t = E.time[j];
+    while (lo < hi) { const m = (lo + hi) >> 1; if (D.time[m] < t) lo = m + 1; else hi = m; }
+    const i = lo > 0 && Math.abs(D.time[lo - 1] - t) < Math.abs(D.time[lo] - t) ? lo - 1 : lo;
+    const kc = depthIdx(E.depth[k]), dtm = Math.round(Math.abs(D.time[i] - t) / 60);
+    rows += `<tr><td colspan="2" style="padding-top:4px">Nearest CTD profile (${dtm} min)</td></tr>`;
+    D.vars.forEach(v => {
+      const x = v.arr[kc * NP + i];
+      rows += `<tr><td>${v.label}</td><td>${Number.isFinite(x) ? x.toPrecision(4) + ' ' + v.units : '—'}</td></tr>`;
+    });
+    ro.classList.remove('muted'); ro.innerHTML = `<table>${rows}</table>`;
+  }
   function readoutSample(q) {               // one transmitted sample, plus its profile's derived values
     const i = S.p[q], la = D.lat[i], lo = D.lon[i];
     let rows = `<tr><td>Time</td><td>${fmtT(sTime(q))}</td></tr>
@@ -1214,10 +1393,17 @@ __PLOTLY__
   }
   const g3 = document.getElementById('c3d'), g2 = document.getElementById('c2d');
   const depthIdx = d => { let b = 0, bd = Infinity; D.depth.forEach((x, k) => { const q = Math.abs(x - d); if (q < bd) { bd = q; b = k; } }); return b; };
+  const eDepthIdx = d => { let b = 0, bd = Infinity; E.depth.forEach((x, k) => { const q = Math.abs(x - d); if (q < bd) { bd = q; b = k; } }); return b; };
   function bind() {
     g3.on('plotly_hover', e => {
       const p = e.points && e.points[0]; if (!p || p.curveNumber !== 0) return;
       if (pts3 && p.pointNumber != null) return readoutSample(pts3[p.pointNumber]);
+      if (cur().echo) {
+        const k = eDepthIdx(-p.z);
+        let j = lastCols[0], bd = Infinity;
+        for (const c of lastCols) { const q = (E.X[c] - p.x) ** 2 + (E.Y[c] - p.y) ** 2; if (q < bd) { bd = q; j = c; } }
+        return readoutEcho(j, k);
+      }
       // Locate the cell from the hovered coordinates (robust to plotly's index ordering).
       const k = depthIdx(-p.z);
       let i = lastCols[0], bd = Infinity;
@@ -1231,6 +1417,10 @@ __PLOTLY__
       const p = e.points && e.points.find(pt => pt.curveNumber === 0); if (!p) return;
       if (pts2 && p.pointNumber != null) return readoutSample(pts2[p.pointNumber]);
       const t = new Date(p.x).getTime() / 1000;
+      if (cur().echo) {                       // nearest echo profile in time
+        let b = 0, bd = Infinity; E.time.forEach((s, j) => { const q = Math.abs(s - t); if (q < bd) { bd = q; b = j; } });
+        return bd <= EHALF ? readoutEcho(b, eDepthIdx(p.y)) : null;
+      }
       let lo = 0, hi = NP - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (D.time[m] < t) lo = m + 1; else hi = m; }
       readout(lo, depthIdx(p.y));
     });
