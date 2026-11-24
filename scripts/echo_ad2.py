@@ -13,7 +13,8 @@ echo.json (repository root) maps deployment names to their .ad2 folders, for --a
 A deployment whose folder has no echo data yet is reported and skipped.
 
 Writes echo/<DEPLOYMENT>_echo.nc: one combined file with every descent profile found in the folder
-(duplicates dropped, so rerun it on the whole folder each time new files arrive), containing
+(one copy per descent profile, see dedup(); rerun it on the whole folder each time new files arrive),
+containing
   time, depth (5 m bin centres), latitude, longitude, sv_70khz, sv_120khz (calibrated Sv, dB),
   plus the raw instrument Sv for both frequencies.
 build_site.py / glider_curtain.py pick the file up and show it as a separate echo layer on the
@@ -70,6 +71,7 @@ FREQS = {"sv_70khz": 70.0, "sv_120khz": 120.0}     # echograms written (narrowba
 FREQ_TOL = 0.5                                      # kHz
 FILL = -100.0
 DZ = 5.0
+DUP_WINDOW = 120    # s: records closer than this are copies of one descent profile
 
 
 # ----------------------------------------------------------------------------- ad2 decoding
@@ -100,9 +102,44 @@ def _records(path):
         i += hs + ds
 
 
+def n_bins(sv):
+    """Depth bins with data (not the -100 fill), all echograms."""
+    return int(np.sum(np.isfinite(sv) & (sv != FILL)))
+
+
+def dedup(recs, window=DUP_WINDOW):
+    """One record per descent profile. The glider can send a profile more than once (for example
+    when it re-sends its whole backlog), and a re-sent copy may differ slightly (timestamp a few
+    seconds off, a bin more or less). Records within `window` s are one profile; keep the copy
+    with the most depth bins with data (ties: the copy received first). recs are in received order.
+    Returns (kept, notes); notes describe groups whose copies were not identical."""
+    order = sorted(range(len(recs)), key=lambda i: (recs[i]["time"], i))
+    groups = []
+    for i in order:
+        if groups and recs[i]["time"] - recs[groups[-1][-1]]["time"] <= window:
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    kept, notes = [], []
+    for g in groups:
+        best = max(g, key=lambda i: (n_bins(recs[i]["sv"]), -i))
+        k = recs[best]
+        kept.append(k)
+        if any(recs[i]["time"] != k["time"] or not np.array_equal(recs[i]["sv"], k["sv"]) for i in g):
+            others = "; ".join(f'{recs[i]["src"]} {_ts(recs[i]["time"])} ({n_bins(recs[i]["sv"])} bins)'
+                               for i in g if i != best)
+            notes.append(f'{_ts(k["time"])}: kept {k["src"]} ({n_bins(k["sv"])} bins); not used: {others}')
+    return kept, notes
+
+
+def _ts(t):
+    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def read_ad2(files):
-    """Echo-telemetry profiles and instrument serial numbers from .ad2 files."""
-    profiles, sns = {}, set()
+    """Echo-telemetry profiles and instrument serial numbers from .ad2 files (in received order,
+    i.e. sorted file names), one record per descent profile (see dedup)."""
+    recs, sns = [], set()
     for f in sorted(files):
         for rid, b in _records(f):
             if rid == 0xA0:
@@ -116,8 +153,11 @@ def read_ad2(files):
                 v = np.frombuffer(b[off:], "<f2").astype(np.float64)
                 ne = len(v) // (nb + 1)
                 v = v[:ne * (nb + 1)].reshape(ne, nb + 1)
-                profiles.setdefault(t, {"freq": v[:, 0], "sv": v[:, 1:], "src": Path(f).name})
-    return [dict(time=t, **profiles[t]) for t in sorted(profiles)], sns
+                recs.append({"time": t, "freq": v[:, 0], "sv": v[:, 1:], "src": Path(f).name})
+    kept, notes = dedup(recs)
+    for n in notes:
+        print(f"  differing copies of one profile - {n}")
+    return kept, sns
 
 
 # ----------------------------------------------------------------------------- glider track

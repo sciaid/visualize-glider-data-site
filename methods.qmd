@@ -74,7 +74,9 @@ product with each surfacing (`.ad2` files): for each descent, the instrument's o
 from 0 to 300 m. `scripts/echo_ad2.py` decodes these records directly from the `.ad2` files
 (checked bit-for-bit against Nortek MIDAS exports), keeps the 70 and 120 kHz channels, and
 writes one file per deployment, `echo/<deployment>_echo.nc`, which the curtain picks up as a
-separate **Echosounder** layer.
+separate **Echosounder** layer. A profile the glider sends more than once is kept once: records
+within 2 minutes are treated as one descent, and the copy with the most depth bins with data is
+used.
 
 - **Calibration.** Sv is shown calibrated: the instrument value plus an offset per frequency
   from the Echoview Calibration Assistant (standard-sphere tank calibration; the offsets and
