@@ -569,11 +569,23 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
               : regions.length ? [regions.reduce((a, r) => latest(r) > latest(a) ? r : a)] : [];
   const selRegions = new Set(regions.length > 1 ? start : regions);
   const regionsEl = document.getElementById('regions');
+  // Years: start with only the most recent start year in the selected region(s), and go back to
+  // it whenever the region changes. ?year=2024 picks a year, ?year=all shows every year.
+  const askedYear = (params.get('year') || '').toLowerCase();
+  function latestYear() {
+    selYears.clear();
+    const inReg = deps.filter(d => regions.length < 2 || selRegions.has(d.region));
+    if (askedYear === 'all') { years.forEach(y => selYears.add(y)); return; }
+    if (years.includes(+askedYear)) { selYears.add(+askedYear); return; }
+    if (inReg.length) selYears.add(Math.max(...inReg.flatMap(d => d.years)));
+  }
+  const regionChanged = () => { if (askedYear !== 'all' && !years.includes(+askedYear)) latestYear(); };
+  latestYear();
   // Called by the overview page's region buttons (same origin): name or 'All'.
   window.setRegion = r => {
     selRegions.clear();
     (r === 'All' ? regions : [r]).forEach(x => selRegions.add(x));
-    render(); fit(visible());
+    regionChanged(); render(); fit(visible());
   };
   const tellHost = () => {
     try { parent.postMessage({ glidermapRegion: selRegions.size === regions.length ? 'All' : [...selRegions][0] }, '*'); } catch (e) {}
@@ -586,11 +598,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       chip.onclick = e => {
         if (e.shiftKey || e.ctrlKey || e.metaKey) { selRegions.has(r) ? selRegions.delete(r) : selRegions.add(r); }
         else { selRegions.clear(); selRegions.add(r); }          // plain click = just this region
-        render(); fit(visible());
+        regionChanged(); render(); fit(visible());
       };
       regionsEl.appendChild(chip);
     });
-    document.getElementById('rAll').onclick = () => { regions.forEach(r => selRegions.add(r)); render(); fit(visible()); };
+    document.getElementById('rAll').onclick = () => { regions.forEach(r => selRegions.add(r)); regionChanged(); render(); fit(visible()); };
   }
   // Projects: shown only when deployments belong to more than one project. Click toggles.
   const projects = [...new Set(deps.map(d => d.project).filter(Boolean))].sort();
@@ -674,7 +686,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
 
   render();
-  fit(regions.length > 1 ? visible() : deps);
+  fit(visible().length ? visible() : deps);
 })();
 </script>
 </body>

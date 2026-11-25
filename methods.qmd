@@ -238,6 +238,12 @@ The line above the strip counts the days with a satellite value, with no clear v
 fetched yet. Values are fetched once and kept; the most recent 10 days are fetched again each
 day because near-real-time values are replaced.
 
+## Overview map
+
+The map on the Overview page starts with only the most recent start year in the selected region
+shown, and goes back to that year when you change region. Use the Start year chips (or **All**) to
+show other years; `index.html?year=all` or `?year=2024` opens it that way.
+
 ## Out now vs real-time data
 
 A deployment is **out now** when its newest real-time data are less than 14 days old. That is
