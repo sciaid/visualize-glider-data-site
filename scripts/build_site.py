@@ -250,12 +250,14 @@ __BUTTONS__
     if (r === bar.dataset.default) u.searchParams.delete('region'); else u.searchParams.set('region', r);
     history.replaceState(null, '', u);
   }
-  frame.src = 'map/index.html?regionbar=' + (bar.hidden ? '0' : '1') + '&region=' + encodeURIComponent(region);
+  const yr = new URLSearchParams(location.search).get('year');      // ?year=all or ?year=2024, passed on
+  const yq = yr ? '&year=' + encodeURIComponent(yr) : '';
+  frame.src = 'map/index.html?regionbar=' + (bar.hidden ? '0' : '1') + '&region=' + encodeURIComponent(region) + yq;
   mark(region);
   buttons.forEach(b => b.onclick = () => {
     mark(b.dataset.region);
     try { frame.contentWindow.setRegion(b.dataset.region); }
-    catch (e) { frame.src = 'map/index.html?regionbar=1&region=' + encodeURIComponent(b.dataset.region); }
+    catch (e) { frame.src = 'map/index.html?regionbar=1&region=' + encodeURIComponent(b.dataset.region) + yq; }
   });
   window.addEventListener('message', e => {           // keep the buttons in step with the map
     if (e.source === frame.contentWindow && e.data && e.data.glidermapRegion) mark(e.data.glidermapRegion);
